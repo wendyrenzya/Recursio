@@ -52,7 +52,7 @@ Tier menentukan batas atas, ILv menentukan kekuatan saat ini. Item Mythical di I
 | Rare | 1,1 | 0,30 | 8 | 35 | Kecil | Benda remeh dengan sifat aneh |
 | Epic | 1,2 | 0,35 | 11 | 30 | Kecil atau sedang | Barang bekas yang seperti punya kemauan sendiri |
 | Legendary | 1,3 | 0,40 | 13 | 25 | Sedang atau besar | Barang dengan riwayat, seolah mengingat kemenangan lama |
-| Mythical | 1,5 | 0,50 | 15 | 20 | Besar, ditambah satu Beban unik | Peninggalan yang tidak mau dipaksa |
+| Mythical | 1,5 | 0,50 | 15 | 20 (tidak aktif di versi 1) | Besar, ditambah satu Beban unik | Peninggalan yang tidak mau dipaksa |
 
 Bonus bersih di ILv tertinggi tiap tier, dibanding item Normal ILv 1:
 
@@ -127,7 +127,7 @@ flowchart LR
 
 **Umur (dalam battle)**
 
-- Umur maksimum menurut tier: Normal 40, Rare 35, Epic 30, Legendary 25, Mythical 20.
+- Umur maksimum menurut tier: Normal 40, Rare 35, Epic 30, Legendary 25, Mythical 20. Item Mythical tidak aus di versi 1, jadi tidak bisa Rusak.
 - Turun 1 tiap battle yang diikuti pemakai, turun 2 jika pemakai pingsan.
 - Umur 0 berarti Rusak: stat dan efek mati, dan item tidak bisa dicuci.
 - Perbaiki memulihkan Umur ke penuh dan memakan 100 langkah. Bahan: 1 Benang.
@@ -164,6 +164,12 @@ Job punya tier yang sama dengan item. NPC hanya bisa menangani item yang tier-ny
 | Sepatu Nenek Nino | Sepatu | Mythical | 8 | SPD +1, HP +2 | DEF -3 | Ngomel, Beban Pegal |
 
 Cek anggaran: Rompi Ojek Pangkalan memakai PV 21 (Pancing 8, DEF +2 10, HP +1 2 = 20) dan MV 8 (SPD -1 = 12). Sepatu Nenek Nino memakai PV 30 (Ngomel 14, SPD +1 12, HP +2 4 = 30) dan MV 15 (DEF -3 = 15).
+
+## Asal item dan bahan
+
+- Equipment ditemukan di peti dan objek saat jelajah, atau diberikan NPC sebagai hadiah cerita (misalnya Sepatu Nenek Nino di Bab 5). ILv-nya mengikuti tabel per bab.
+- Musuh tidak menjatuhkan equipment. Musuh biasa menjatuhkan satu bahan (Benang atau Kain Perca, acak) dengan peluang 25 persen per battle, dan bos selalu menjatuhkan 1 Kain Perca.
+- Tidak ada toko dan uang di versi 1, sesuai PRD. Angka drop adalah titik awal untuk tuning.
 
 ## Struktur data
 
@@ -224,7 +230,7 @@ Perubahan di tabel berikut sudah diterapkan ke PRD dan Game System.
 
 **Pertanyaan terbuka**
 
-- [ ] Ibu Nino, Nenek Kael, dan nenek Nino pemilik sepatu belum ada di kerangka novel. Perlu ditambahkan ke novel atau diperkenalkan khusus untuk game?
-- [ ] Perbaikan dan upgrade memakai bahan Benang dan Kain Perca. Kalau dianggap terlalu mirip crafting, bahan bisa dihapus dan biaya cukup berupa langkah jelajah.
-- [ ] Item Mythical rusak (Umur 0) tidak bisa diperbaiki di versi 1. Cukup dengan hanya satu item Mythical di Bab 5, atau perlu jalan keluar?
-- [ ] Asal item: ditemukan saat jelajah, drop musuh, atau hadiah NPC?
+- [x] Ibu Nino, Nenek Kael, dan nenek Nino diperkenalkan khusus untuk game dulu, tidak mengikat novel.
+- [x] Bahan Benang dan Kain Perca dipertahankan. Bahan hanya ditemukan atau jadi drop, tidak dibuat, dan tidak ada toko.
+- [x] Item Mythical tidak aus di versi 1, jadi tidak ada kasus Mythical rusak.
+- [x] Asal item: jelajah dan hadiah NPC. Musuh hanya menjatuhkan bahan (lihat Asal item dan bahan).

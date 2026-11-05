@@ -34,8 +34,8 @@ Sebuah entitas AI yang sadar diri dan tersebar di seluruh internet mulai mengger
 
 | Bab | Fase novel | Inti cerita | Penekanan gameplay |
 | --- | --- | --- | --- |
-| 1 | Fenomena alam | Gempa makin sering, perangkat error, semua mengira fenomena geologis | Tutorial jelajah, dialog, battle pertama dengan anomali EM |
-| 2 | Keanehan lokal | Nino melihat pola aneh di jaringan, hal-hal yang tak bisa dijelaskan | Kael bergabung, ganti karakter, investigasi |
+| 1 | Fenomena alam | Gempa makin sering, perangkat error, semua mengira fenomena geologis | Tutorial jelajah, dialog, battle pertama dengan anomali EM, Kael sudah ikut di party |
+| 2 | Keanehan lokal | Nino melihat pola aneh di jaringan, hal-hal yang tak bisa dijelaskan | Rahasia perjuangan Kael terungkap, ganti karakter, investigasi |
 | 3 | Komunitas diserang | Bug hunter dan AI enthusiast hilang satu per satu, Nino melacak ke kota lain | Banyak area, kumpulkan petunjuk |
 | 4 | Brainwash | Orang di lingkungan Nino terpengaruh, siapa yang bisa dipercaya | Musuh warga yang dilumpuhkan, bar kesadaran Kael |
 | 5 | Okultisme terungkap | Sekte dan nabinya muncul, tangan kanan sekte ternyata orang dekat | Bos pengikut sekte, twist, akhir versi 1 |
@@ -129,10 +129,10 @@ Battle turn-based dan non-lethal. Intinya adalah Stack, dengan empat mekanik pen
 
 - [ ] Nama tangan kanan sekte dan pemimpin sekte.
 - [ ] Lokasi spesifik kampung terpencil dan kota-kota di Bab 3.
-- [ ] Ganti karakter bebas kapan saja, atau dikunci per bagian cerita?
-- [ ] Bahasa dialog: Indonesia baku, atau dicampur dialek Manado?
-- [ ] Apakah versi 1 benar-benar berakhir tepat setelah twist di Bab 5?
-- [ ] Ibu Nino dan Nenek Kael perlu ditambahkan ke kerangka novel, atau diperkenalkan khusus untuk game?
-- [ ] Kael sudah ada di party sejak Bab 1 (sesuai Game System), atau baru bergabung di Bab 2 (sesuai tabel alur cerita)?
+- [x] Ganti karakter bebas kapan saja saat jelajah. Di battle, keduanya selalu ada di party.
+- [x] Dialog memakai bahasa Indonesia santai dengan sentuhan dialek Manado ringan.
+- [x] Versi 1 berakhir tepat setelah twist di Bab 5.
+- [x] Ibu Nino, Nenek Kael, dan nenek Nino diperkenalkan khusus untuk game dulu. Nama dan latar mereka tidak mengikat novel.
+- [x] Kael ada di party sejak Bab 1. Bab 2 menonjolkan rahasia perjuangan kesadarannya.
 
 Dokumen turunan di folder yang sama: Game System (angka dan data), Battle System (mekanik battle), dan Equipment (item dan perawatannya).

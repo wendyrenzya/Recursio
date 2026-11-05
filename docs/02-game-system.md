@@ -87,8 +87,8 @@ Putus Sinyal tidak mempan pada pengikut sekte, karena mereka patuh lewat iman, b
 | Kopi Kaleng | Pulihkan 30 HP satu sekutu |
 | Baterai | Pulihkan 5 EN satu karakter |
 | Headset Gaming | Pulihkan 30 Kesadaran Kael |
-| Benang | Bahan perbaikan dan upgrade equipment, tidak dipakai di battle |
-| Kain Perca | Bahan upgrade equipment, tidak dipakai di battle |
+| Benang | Bahan perbaikan dan upgrade equipment, didapat dari jelajah dan drop musuh, tidak dipakai di battle |
+| Kain Perca | Bahan upgrade equipment, didapat dari jelajah dan drop musuh, tidak dipakai di battle |
 | Benang Emas | Bahan untuk menaikkan tier job Nenek Kael ke Epic, ditemukan di Bab 3 |
 
 | Status | Berlaku untuk | Arti |
@@ -126,7 +126,7 @@ Game yang dimainkan Kael di titik aman menjadi jangkar kesadarannya, sesuai ceri
 
 ## Musuh dan bos per bab
 
-Nama masih placeholder. Pengikut sekte di Bab 5 tidak berstatus Terkendali, jadi Putus Sinyal tidak membebaskan mereka. Pengikut sekte tidak punya HP: mereka dikalahkan lewat bar Iman dengan kartu Bukti (lihat Battle System). Efek Putus Sinyal terhadap Iman belum ditetapkan di Battle System.
+Nama masih placeholder. Pengikut sekte di Bab 5 tidak berstatus Terkendali, jadi Putus Sinyal tidak bisa dipakai melawan mereka, karena tidak ada sinyal yang bisa diputus. Pengikut sekte tidak punya HP: mereka dikalahkan lewat bar Iman dengan Serang dan kartu Bukti (lihat Battle System).
 
 | Bab | Musuh | Tipe | HP | ATK | DEF | SPD | XP |
 | --- | --- | --- | --- | --- | --- | --- | --- |

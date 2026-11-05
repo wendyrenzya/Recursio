@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Recursio</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0b14; overflow: hidden; overscroll-behavior: none; }
+  body { display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; image-rendering: pixelated; touch-action: none; }
+</style>
+</head>
+<body>
+<canvas id="c" width="180" height="320"></canvas>
+<script>
+"use strict";
+
+// Resolusi internal 180 x 320, tile 16 px, kecepatan jalan 4 tile per detik
+const VW = 180, VH = 320, TS = 16, SPEED = 64;
+const GRASS = 0, ROAD = 1, WALL = 2, TREE = 3, WATER = 4;
+
+// Peta langkah 1: 20 x 32 tile, dibuat dari persegi panjang
+const MW = 20, MH = 32;
+const map = Array.from({ length: MH }, () => new Array(MW).fill(GRASS));
+const fill = (x, y, w, h, t) => {
+  for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) map[j][i] = t;
+};
+fill(0, 0, MW, 1, WALL); fill(0, MH - 1, MW, 1, WALL);   // pagar luar
+fill(0, 0, 1, MH, WALL); fill(MW - 1, 0, 1, MH, WALL);
+fill(9, 1, 2, MH - 2, ROAD);                              // jalan utama
+fill(1, 20, 18, 2, ROAD);                                 // jalan melintang
+fill(3, 4, 4, 3, WALL);  fill(4, 7, 6, 1, ROAD);          // rumah Nino dan jalannya
+fill(13, 4, 4, 3, WALL); fill(10, 7, 6, 1, ROAD);         // rumah Kael dan jalannya
+fill(2, 12, 2, 2, TREE); fill(15, 12, 3, 2, TREE); fill(3, 24, 2, 3, TREE);
+fill(13, 24, 5, 4, WATER);
+
+const walkable = (x, y) =>
+  x >= 0 && y >= 0 && x < MW && y < MH && (map[y][x] === GRASS || map[y][x] === ROAD);
+
+// Sprite Nino 16 x 16, tiap huruf satu warna
+const SPRITE = [
+  "................",
+  "....kkkkkkkk....",
+  "...khhhhhhhhk...",
+  "...khhhhhhhhk...",
+  "...khhssssshk...",
+  "...kssksskssk...",
+  "...kssssssssk...",
+  ".....kkkkkk.....",
+  "....kbbbbbbk....",
+  "...kbbbbbbbbk...",
+  "...ksbbbbbbsk...",
+  "...ksbbbbbbsk...",
+  "....kbbbbbbk....",
+  "....kppppppk....",
+  "....kppkkppk....",
+  "....kwwk.kwwk...",
+];
+const PAL = { k: "#1a1a2e", h: "#4a3326", s: "#e8b98a", b: "#d9822b", p: "#2d3142", w: "#eeeeee" };
+
+const sprite = document.createElement("canvas");
+sprite.width = sprite.height = TS;
+const sc = sprite.getContext("2d");
+SPRITE.forEach((row, y) => [...row].forEach((ch, x) => {
+  if (ch === ".") return;
+  sc.fillStyle = PAL[ch];
+  sc.fillRect(x, y, 1, 1);
+}));
+
+// Atlas tile, digambar sekali
+const atlas = document.createElement("canvas");
+atlas.width = TS * 5; atlas.height = TS;
+const ac = atlas.getContext("2d");
+const px = (c, x, y, w, h) => { ac.fillStyle = c; ac.fillRect(x, y, w, h); };
+function drawTile(t) {
+  const ox = t * TS;
+  if (t === GRASS || t === TREE) {
+    px("#4f8a3c", ox, 0, TS, TS);
+    for (let k = 0; k < 6; k++) {
+      px(k % 2 ? "#62a04a" : "#3f7330", ox + (k * 5 + 3) % 14 + 1, (k * 7 + 2) % 14 + 1, 1, 1);
+    }
+  }
+  if (t === ROAD) {
+    px("#b39a6b", ox, 0, TS, TS);
+    for (let k = 0; k < 6; k++) {
+      px(k % 2 ? "#c7b07f" : "#9c8556", ox + (k * 5 + 3) % 14 + 1, (k * 7 + 2) % 14 + 1, 1, 1);
+    }
+  }
+  if (t === WALL) {
+    px("#6e5a4c", ox, 0, TS, TS);
+    px("#8a7464", ox, 0, TS, 1);
+    px("#4b3b31", ox, 5, TS, 1); px("#4b3b31", ox, 11, TS, 1);
+    px("#4b3b31", ox + 8, 0, 1, 5); px("#4b3b31", ox + 4, 6, 1, 5);
+    px("#4b3b31", ox + 12, 6, 1, 5); px("#4b3b31", ox + 8, 12, 1, 4);
+  }
+  if (t === TREE) {
+    px("#5b3a22", ox + 7, 10, 2, 6);
+    px("#2f6b2f", ox + 3, 2, 10, 8);
+    px("#3f8a3f", ox + 4, 3, 8, 5);
+    px("#245524", ox + 4, 9, 8, 1);
+  }
+  if (t === WATER) {
+    px("#3a6ea5", ox, 0, TS, TS);
+    px("#5b92c7", ox + 3, 4, 4, 1); px("#5b92c7", ox + 9, 10, 4, 1);
+    px("#2d5a8a", ox + 1, 13, 4, 1);
+  }
+}
+for (let t = 0; t < 5; t++) drawTile(t);
+
+// Keadaan permainan
+const player = { tx: 9, ty: 3, x: 9 * TS, y: 3 * TS, path: [] };
+const target = { x: -1, y: -1 };
+const cam = { x: 0, y: 0 };
+
+// Cari jalur terpendek 4 arah (BFS), null jika tidak bisa dicapai
+function findPath(sx, sy, ex, ey) {
+  if (!walkable(ex, ey)) return null;
+  const key = (x, y) => y * MW + x;
+  const prev = new Map([[key(sx, sy), null]]);
+  const queue = [[sx, sy]];
+  for (let i = 0; i < queue.length; i++) {
+    const [x, y] = queue[i];
+    if (x === ex && y === ey) break;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (!walkable(nx, ny) || prev.has(key(nx, ny))) continue;
+      prev.set(key(nx, ny), [x, y]);
+      queue.push([nx, ny]);
+    }
+  }
+  if (!prev.has(key(ex, ey))) return null;
+  const path = [];
+  for (let c = [ex, ey]; key(c[0], c[1]) !== key(sx, sy); c = prev.get(key(c[0], c[1]))) path.push(c);
+  return path.reverse();
+}
+
+function update(dt) {
+  let move = SPEED * dt;
+  while (move > 0) {
+    const gx = player.tx * TS, gy = player.ty * TS;
+    if (player.x === gx && player.y === gy) {
+      const next = player.path.shift();
+      if (!next) { target.x = -1; break; }
+      player.tx = next[0]; player.ty = next[1];
+      continue;
+    }
+    const dx = gx - player.x, dy = gy - player.y;
+    const dist = Math.abs(dx) + Math.abs(dy);
+    if (move >= dist) {
+      player.x = gx; player.y = gy; move -= dist;
+    } else {
+      player.x += Math.sign(dx) * move; player.y += Math.sign(dy) * move; move = 0;
+    }
+  }
+}
+
+function updateCamera() {
+  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+  cam.x = Math.round(clamp(player.x + TS / 2 - VW / 2, 0, MW * TS - VW));
+  cam.y = Math.round(clamp(player.y + TS / 2 - VH / 2, 0, MH * TS - VH));
+}
+
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d", { alpha: false });
+ctx.imageSmoothingEnabled = false;
+
+function render(now) {
+  ctx.fillStyle = "#0b0b14";
+  ctx.fillRect(0, 0, VW, VH);
+  const x0 = Math.floor(cam.x / TS), y0 = Math.floor(cam.y / TS);
+  for (let j = y0; j <= y0 + Math.ceil(VH / TS); j++) {
+    for (let i = x0; i <= x0 + Math.ceil(VW / TS); i++) {
+      if (i < 0 || j < 0 || i >= MW || j >= MH) continue;
+      ctx.drawImage(atlas, map[j][i] * TS, 0, TS, TS, i * TS - cam.x, j * TS - cam.y, TS, TS);
+    }
+  }
+  if (target.x >= 0 && Math.floor(now / 250) % 2 === 0) {
+    ctx.strokeStyle = "#ffe066";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(target.x * TS - cam.x + 1.5, target.y * TS - cam.y + 1.5, TS - 3, TS - 3);
+  }
+  ctx.drawImage(sprite, Math.round(player.x - cam.x), Math.round(player.y - cam.y));
+}
+
+// Tap layar menjadi tile tujuan
+canvas.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  const r = canvas.getBoundingClientRect();
+  const tx = Math.floor(((e.clientX - r.left) * VW / r.width + cam.x) / TS);
+  const ty = Math.floor(((e.clientY - r.top) * VH / r.height + cam.y) / TS);
+  const path = findPath(player.tx, player.ty, tx, ty);
+  if (!path) return;
+  player.path = path;
+  target.x = tx; target.y = ty;
+});
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+// Skala bilangan bulat agar piksel tetap tajam
+function fit() {
+  const s = Math.max(1, Math.floor(Math.min(innerWidth / VW, innerHeight / VH)));
+  canvas.style.width = VW * s + "px";
+  canvas.style.height = VH * s + "px";
+}
+addEventListener("resize", fit);
+fit();
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  update(dt);
+  updateCamera();
+  render(now);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// Dipakai untuk uji otomatis
+window.__recursio = { VW, VH, TS, MW, MH, map, player, cam, target };
+</script>
+</body>
+</html>

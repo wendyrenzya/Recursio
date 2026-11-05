@@ -123,6 +123,7 @@ Pengikut sekte patuh karena iman, bukan karena dikendalikan. Karena itu battle m
 - Bukti yang cocok dengan Keyakinan menurunkan Iman 30, yang tidak cocok hanya 8. Bukti bisa di-stack.
 - Overflow saat menumpuk Bukti membuat pengikut makin yakin: Iman naik 10.
 - Serang biasa hanya menurunkan Iman 5, karena kekerasan tidak menggoyahkan iman.
+- Putus Sinyal tidak bisa dipakai melawan pengikut sekte, karena mereka tidak dikendalikan entitas.
 - Pengikut tetap menyerang HP party seperti musuh biasa.
 - Bos Pengawal Nabi punya Iman 200 dan dua Keyakinan.
 
