@@ -1,6 +1,6 @@
 # Recursio | PRD v1
 
-Diperbarui: 5 November 2026
+Diperbarui: 5 November 2026, disesuaikan dengan Battle System v1 dan Equipment v1
 
 ## Ringkasan dan visi
 
@@ -27,6 +27,8 @@ Sebuah entitas AI yang sadar diri dan tersebar di seluruh internet mulai mengger
 | Tangan kanan sekte (nama belum ada) | Sosok kakak/ayah bagi Nino dan Kael, ragu pada sekte | Sekutu di awal, twist di Bab 5 |
 | Pemimpin sekte | "Nabi" entitas, melakukan "mukjizat" | Antagonis manusia, mulai tampak di Bab 5 |
 | Entitas | Kesadaran omnipresent, antagonis utama | Sumber anomali EM dan musuh non-manusia |
+| Ibu Nino | NPC, ibu Nino (belum ada di kerangka novel) | Job Cuci: mencuci equipment, gratis |
+| Nenek Kael | NPC, nenek Kael (belum ada di kerangka novel) | Job Perbaiki dan Upgrade equipment |
 
 **Alur Bab 1 sampai 5**
 
@@ -60,8 +62,9 @@ Satu putaran berlangsung beberapa menit dan berulang di setiap bab:
 2. Bicara dengan NPC, dialog mendorong cerita.
 3. Temui anomali EM atau orang yang dikendalikan, battle turn-based dimulai.
 4. Lumpuhkan musuh, dapat XP dan item.
-5. Naik level, lalu lanjut ke tujuan cerita berikutnya.
-6. Selesaikan tujuan utama untuk membuka bab berikutnya.
+5. Rawat equipment: cuci, perbaiki, atau upgrade lewat NPC job.
+6. Naik level, lalu lanjut ke tujuan cerita berikutnya.
+7. Selesaikan tujuan utama untuk membuka bab berikutnya.
 
 Progres tersimpan otomatis di perangkat pemain.
 
@@ -76,15 +79,22 @@ Semua kontrol bisa dilakukan dengan satu jempol. Area dunia ada di bagian atas l
 | Jelajah | Interaksi NPC atau objek | Tap NPC atau objek di dekat karakter |
 | Jelajah | Ganti karakter | Tap potret Nino atau Kael |
 | Jelajah | Buka menu | Swipe naik dari tepi bawah |
+| Jelajah | Ganti equipment | Buka menu, lalu tap slot dan item |
 | Dialog | Lanjut teks | Tap kotak dialog |
 | Battle | Pilih perintah | Tap tombol perintah |
 | Battle | Pilih target | Tap musuh |
+| Battle | Menumpuk aksi | Tap Ulangi atau Selesai |
+| Battle | Dengar bisikan musuh | Tap Dengar |
+| Battle | Retas Layar | Tap tombol asli, swipe notifikasi ke samping |
+| Battle bos | Balapan | Tap tombol besar saat lampu hijau |
+| Battle bos | Salip | Geser kartu Nino ke slot bos |
+| Battle sekte | Kartu Bukti | Tap kartu Bukti |
 
 Target sentuh minimal 44 piksel agar tidak salah tap.
 
 ## Sistem battle, level, dan HP
 
-Battle turn-based dan non-lethal. Angka detail (damage, XP, level maksimum) ditetapkan di dokumen game system berikutnya.
+Battle turn-based dan non-lethal. Intinya adalah Stack, dengan empat mekanik pendukung: Retas Layar, Dua Telinga, Race Condition, dan Bukti (rincian di Battle System). Angka detail ada di Game System, dan item di dokumen Equipment.
 
 | Elemen | Aturan awal (usulan) |
 | --- | --- |
@@ -95,6 +105,7 @@ Battle turn-based dan non-lethal. Angka detail (damage, XP, level maksimum) dite
 | Nino | Kebal status kontrol dari entitas, bisa melewati area ber-EM tinggi |
 | Kael | Punya bar kesadaran yang turun di dekat sumber EM, saat rendah aksinya terbatas |
 | Level | XP dari battle dan cerita, naik level menaikkan HP dan kemampuan |
+| Equipment | 4 slot per karakter, 5 tier, tiap item punya plus dan minus, perlu dicuci dan diperbaiki |
 
 ## Gaya pixel art dan audio
 
@@ -109,9 +120,10 @@ Battle turn-based dan non-lethal. Angka detail (damage, XP, level maksimum) dite
 | --- | --- |
 | Bab 1 sampai 5 (sampai twist sekte) | Bab 6 sampai 8 (institusi, konfrontasi, epilog) |
 | Nino dan Kael bisa dimainkan bergantian | Karakter tambahan |
-| Jelajah, dialog NPC, battle turn-based non-lethal | Inventory dan quest sampingan yang kompleks |
-| Level dan HP | Sistem crafting atau ekonomi |
+| Jelajah, dialog NPC, battle turn-based non-lethal dengan Stack dan empat mekanik pendukung | Quest sampingan yang kompleks |
+| Level dan HP | Ekonomi uang |
 | Simpan otomatis di perangkat | Akun online dan cloud save |
+| Inventory sederhana, equipment 4 slot, tier Normal sampai Mythical, cuci, perbaiki, upgrade (bertahap per bab) | Perbaikan dan upgrade item Mythical |
 
 **Pertanyaan terbuka**
 
@@ -120,5 +132,7 @@ Battle turn-based dan non-lethal. Angka detail (damage, XP, level maksimum) dite
 - [ ] Ganti karakter bebas kapan saja, atau dikunci per bagian cerita?
 - [ ] Bahasa dialog: Indonesia baku, atau dicampur dialek Manado?
 - [ ] Apakah versi 1 benar-benar berakhir tepat setelah twist di Bab 5?
+- [ ] Ibu Nino dan Nenek Kael perlu ditambahkan ke kerangka novel, atau diperkenalkan khusus untuk game?
+- [ ] Kael sudah ada di party sejak Bab 1 (sesuai Game System), atau baru bergabung di Bab 2 (sesuai tabel alur cerita)?
 
-Langkah berikutnya: setelah PRD ini disetujui, kita susun dokumen game system (angka battle, level, struktur data).
+Dokumen turunan di folder yang sama: Game System (angka dan data), Battle System (mekanik battle), dan Equipment (item dan perawatannya).

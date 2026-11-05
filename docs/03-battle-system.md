@@ -130,7 +130,7 @@ Pemain yang melewatkan petunjuk saat jelajah akan merasakan Bab 5 lebih berat. J
 
 ## Perubahan ke Game System v1 dan verifikasi
 
-Dokumen ini mengubah enam bagian Game System v1. Game System akan disesuaikan setelah dokumen ini dan dokumen Equipment disetujui.
+Dokumen ini mengubah enam bagian Game System v1. Perubahan ini sudah diterapkan ke Game System.
 
 | Bagian Game System | Perubahan |
 | --- | --- |
@@ -150,4 +150,4 @@ Dokumen ini mengubah enam bagian Game System v1. Game System akan disesuaikan se
 
 **Pertanyaan terbuka**
 
-- [ ] Equipment yang memberi status khusus bisa memengaruhi mekanik ini, misalnya mengurangi peluang Overflow atau memperpanjang batas waktu Balapan. Dibahas di dokumen Equipment.
+- [x] Equipment yang memberi efek khusus memengaruhi mekanik ini: Overflow Ringan, Waktu Lega, Telinga Tenang, Start Mantap, dan Ulang Sekali. Dirinci di dokumen Equipment.

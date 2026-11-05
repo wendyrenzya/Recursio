@@ -1,6 +1,6 @@
 # Recursio | Game System v1
 
-Diperbarui: 5 November 2026
+Diperbarui: 5 November 2026, disesuaikan dengan Battle System v1 dan Equipment v1
 
 ## Asumsi
 
@@ -14,7 +14,7 @@ Pertanyaan terbuka di PRD dijawab sementara dengan asumsi di bawah. Semua angka 
 
 ## Stat, level, dan XP
 
-Empat stat: HP, ATK, DEF, SPD. Kecepatan (SPD) tetap per karakter di versi 1 supaya sederhana. Stat naik per level: stat = dasar + pertumbuhan x (level - 1).
+Empat stat: HP, ATK, DEF, SPD. Kecepatan (SPD) tetap per karakter di versi 1 supaya sederhana. Stat naik per level: stat = dasar + pertumbuhan x (level - 1). Stat akhir di battle adalah stat itu ditambah bonus dari equipment (lihat Equipment).
 
 | Karakter | HP | ATK | DEF | SPD | Peran |
 | --- | --- | --- | --- | --- | --- |
@@ -54,11 +54,11 @@ Battle berjalan per ronde. Semua petarung bergiliran dari SPD tertinggi ke teren
 \text{damage} = \max\left(1,\ \operatorname{round}(ATK \times m \times v) - \left\lfloor \tfrac{DEF}{2} \right\rfloor\right)
 ```
 
-m adalah pengali aksi (Serang 1,0), v adalah variasi acak 0,9 sampai 1,1.
+m adalah pengali Stack (kedalaman 1 sampai 4, lihat Battle System) dikali pengali skill (Serang 1,0), v adalah variasi acak 0,9 sampai 1,1.
 
 | Perintah | Efek |
 | --- | --- |
-| Serang | Damage dengan m = 1,0, tanpa biaya |
+| Serang | Damage dengan pengali skill 1,0, bisa di-Stack, tanpa biaya |
 | Skill | Biaya EN, efek sesuai skill |
 | Barang | Pakai satu item, memakai satu giliran |
 | Bertahan | DEF dua kali lipat sampai giliran berikutnya, EN +2 |
@@ -73,9 +73,12 @@ EN (energi skill) maksimum 10, mulai battle di 5, dan pulih 2 setiap giliran kar
 | Karakter | Skill | EN | Efek |
 | --- | --- | --- | --- |
 | Nino | Pindai | 2 | DEF satu musuh turun 3 selama 3 giliran |
-| Nino | Putus Sinyal | 4 | Damage m = 1,5, m = 2,0 ke anomali EM. Musuh manusia berstatus Terkendali dengan HP di bawah 30 persen langsung dibebaskan |
+| Nino | Putus Sinyal | 4 | Damage dengan pengali skill 1,5, dan 2,0 ke anomali EM. Musuh manusia berstatus Terkendali dengan HP di bawah 30 persen langsung dibebaskan |
+| Nino | Patch | 2 | Hapus semua glitch Retas Layar dari layar party dan kebal Retas selama 2 giliran. Tidak bisa di-Stack |
+| Nino | Salip | 3 | Hanya battle bos, sekali per ronde, tidak memakai giliran. Geser kartu Nino ke slot kartu bos untuk memicu Balapan |
 | Kael | Jangkar | 3 | Pulihkan HP satu sekutu sebesar 20 + 2 x level |
 | Kael | Tahan Diri | 2 | Pulihkan Kesadaran Kael sebesar 25 |
+| Kael | Dengar | 0 (Kesadaran 15) | Sekali per ronde, tidak memakai giliran. Menampilkan aksi berikutnya semua musuh sampai akhir ronde |
 
 Putus Sinyal tidak mempan pada pengikut sekte, karena mereka patuh lewat iman, bukan lewat kontrol paksa entitas. Ini membuat Bab 5 terasa berbeda dari bab sebelumnya.
 
@@ -84,6 +87,9 @@ Putus Sinyal tidak mempan pada pengikut sekte, karena mereka patuh lewat iman, b
 | Kopi Kaleng | Pulihkan 30 HP satu sekutu |
 | Baterai | Pulihkan 5 EN satu karakter |
 | Headset Gaming | Pulihkan 30 Kesadaran Kael |
+| Benang | Bahan perbaikan dan upgrade equipment, tidak dipakai di battle |
+| Kain Perca | Bahan upgrade equipment, tidak dipakai di battle |
+| Benang Emas | Bahan untuk menaikkan tier job Nenek Kael ke Epic, ditemukan di Bab 3 |
 
 | Status | Berlaku untuk | Arti |
 | --- | --- | --- |
@@ -92,6 +98,8 @@ Putus Sinyal tidak mempan pada pengikut sekte, karena mereka patuh lewat iman, b
 | Pingsan | Party | HP habis, tidak bisa beraksi sampai battle selesai |
 | Lumpuh | Musuh manusia | HP habis, tidak bisa beraksi, tidak mati |
 | DEF turun | Musuh | Efek Pindai, 3 giliran |
+| Hang | Semua petarung | Melewatkan giliran berikutnya, akibat Overflow di kedalaman 4 atau stack yang runtuh karena Sela |
+| Ragu | Pengikut sekte | Iman habis, berhenti bertarung |
 
 ## Bar kesadaran Kael
 
@@ -110,6 +118,7 @@ Kesadaran Kael bernilai 0 sampai 100 dan hanya berlaku untuknya, karena Nino keb
 | Jelajah di zona EM tinggi | turun 1 setiap 2 langkah |
 | Battle, tiap giliran Kael saat anomali EM masih hidup | turun 5 |
 | Terkena serangan EM | turun 10 |
+| Memakai skill Dengar | turun 15 |
 | Istirahat di titik aman (rumah, tempat main game) | pulih penuh |
 | Skill Tahan Diri atau item Headset Gaming | naik 25 atau 30 |
 
@@ -117,7 +126,7 @@ Game yang dimainkan Kael di titik aman menjadi jangkar kesadarannya, sesuai ceri
 
 ## Musuh dan bos per bab
 
-Nama masih placeholder. Pengikut sekte di Bab 5 tidak berstatus Terkendali, jadi Putus Sinyal hanya memberi damage biasa tanpa membebaskan.
+Nama masih placeholder. Pengikut sekte di Bab 5 tidak berstatus Terkendali, jadi Putus Sinyal tidak membebaskan mereka. Pengikut sekte tidak punya HP: mereka dikalahkan lewat bar Iman dengan kartu Bukti (lihat Battle System). Efek Putus Sinyal terhadap Iman belum ditetapkan di Battle System.
 
 | Bab | Musuh | Tipe | HP | ATK | DEF | SPD | XP |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -132,8 +141,8 @@ Nama masih placeholder. Pengikut sekte di Bab 5 tidak berstatus Terkendali, jadi
 | 4 | Warga Terkendali Kuat | Manusia | 90 | 19 | 8 | 7 | 40 |
 | 4 | Anomali Pusaran | Anomali EM | 100 | 22 | 10 | 9 | 45 |
 | 4 | Orang Dekat Terkendali (bos) | Manusia | 280 | 24 | 12 | 8 | 140 |
-| 5 | Pengikut Sekte | Manusia, beriman | 120 | 26 | 14 | 8 | 55 |
-| 5 | Pengawal Nabi (bos) | Manusia, beriman | 400 | 28 | 15 | 10 | 200 |
+| 5 | Pengikut Sekte | Manusia, beriman | Iman 100 | 26 | 14 | 8 | 55 |
+| 5 | Pengawal Nabi (bos) | Manusia, beriman | Iman 200 | 28 | 15 | 10 | 200 |
 
 Semua bos manusia dilumpuhkan atau dibebaskan, tidak dibunuh. Angka di tabel diuji dengan simulasi pada tahap build.
 
@@ -168,10 +177,19 @@ Semua angka di atas disimpan sebagai data, bukan ditulis di dalam kode, supaya t
       "nino": { "level": 1, "xp": 0, "hp": 40, "en": 5 },
       "kael": { "level": 1, "xp": 0, "hp": 50, "kesadaran": 100 }
     },
-    "item": { "kopi_kaleng": 0, "baterai": 0, "headset_gaming": 0 }
+    "item": { "kopi_kaleng": 0, "baterai": 0, "headset_gaming": 0 },
+    "bahan": { "benang": 0, "kain_perca": 0, "benang_emas": 0 },
+    "equip": {
+      "nino": { "topi": null, "baju": null, "gelang": null, "sepatu": null },
+      "kael": { "topi": null, "baju": null, "gelang": null, "sepatu": null }
+    },
+    "itemMiliki": [],
+    "pekerjaanNpc": []
   }
 }
 ```
+
+Bentuk data item, `itemMiliki`, dan `pekerjaanNpc` dirinci di Equipment.
 
 ## Urutan build dan verifikasi
 
@@ -179,9 +197,9 @@ Saya usul membangun Bab 1 sampai tuntas dulu sebagai irisan vertikal, baru Bab 2
 
 1. **Kerangka:** canvas portrait, tile map, tap-to-move, kamera. Lulus jika karakter berjalan ke tile yang di-tap di layar 360 x 640 dan tidak menembus tembok.
 2. **Dialog dan NPC:** Lulus jika tap NPC membuka dialog dan tap kotak dialog melanjutkannya sampai selesai.
-3. **Mesin battle dari data:** Lulus jika simulasi 1.000 battle per bab dengan party di level target menang 70 sampai 90 persen untuk musuh biasa dan 50 sampai 70 persen untuk bos.
-4. **Level, XP, bar kesadaran, simpan:** Lulus jika level naik sesuai tabel dan data yang dimuat ulang sama dengan yang disimpan.
+3. **Mesin battle dari data:** mulai dari Stack, Retas Layar, dan Dengar. Balapan dan Bukti menyusul sesuai bab. Lulus jika simulasi 1.000 battle per bab dengan party di level target menang 70 sampai 90 persen untuk musuh biasa dan 50 sampai 70 persen untuk bos.
+4. **Level, XP, bar kesadaran, equipment dasar, simpan:** equipment dasar berarti 4 slot, tier Normal dan Rare, plus dan minus. Lulus jika level naik sesuai tabel, bonus equipment masuk ke stat, dan data yang dimuat ulang sama dengan yang disimpan.
 5. **Bab 1 lengkap:** Lulus jika pemain bisa memainkan dari awal sampai mengalahkan Lonjakan Sinyal di HP.
-6. **Bab 2 sampai 5:** satu bab per tahap, tiap bab diuji dengan cara yang sama.
+6. **Bab 2 sampai 5:** satu bab per tahap, tiap bab diuji dengan cara yang sama. Equipment menyusul per bab sesuai tabel di Equipment: cuci dan perbaikan di Bab 2, Epic di Bab 3, Legendary di Bab 4, Mythical di Bab 5.
 
-Sebelum langkah 1 dimulai, saya butuh persetujuanmu atas PRD, dokumen ini, dan asumsi di bagian awal.
+PRD, dokumen ini, Battle System, dan Equipment sudah disetujui. Pertanyaan terbuka di PRD dan Equipment perlu dijawab sebelum konten bab terkait dibuat.

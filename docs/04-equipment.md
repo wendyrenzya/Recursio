@@ -186,7 +186,7 @@ Cek anggaran: Rompi Ojek Pangkalan memakai PV 21 (Pancing 8, DEF +2 10, HP +1 2 
     "itemMiliki": [
       { "id": "sepatu_nenek_nino", "ilv": 8, "kotor": 0, "umur": 20, "beban": 0 }
     ],
-    "bahan": { "benang": 0, "kain_perca": 0 },
+    "bahan": { "benang": 0, "kain_perca": 0, "benang_emas": 0 },
     "pekerjaanNpc": [
       { "npc": "nenek_kael", "jenis": "upgrade", "itemId": "gelang_karet_nasi_kuning", "sisaLangkah": 120 }
     ]
@@ -205,6 +205,8 @@ Equipment menambah cakupan versi 1, jadi dibangun bertahap mengikuti bab.
 | 3 | Tier Epic, efek sedang, upgrade, Benang Emas |
 | 4 | Tier Legendary, efek besar, Tukang Cuci Kampung |
 | 5 | Item Mythical pertama, Sepatu Nenek Nino, Beban Pegal |
+
+Perubahan di tabel berikut sudah diterapkan ke PRD dan Game System.
 
 | Dokumen | Perubahan |
 | --- | --- |
