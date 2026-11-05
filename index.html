@@ -34,8 +34,10 @@ fill(13, 4, 4, 3, WALL); fill(10, 7, 6, 1, ROAD);         // rumah Kael dan jala
 fill(2, 12, 2, 2, TREE); fill(15, 12, 3, 2, TREE); fill(3, 24, 2, 3, TREE);
 fill(13, 24, 5, 4, WATER);
 
-const walkable = (x, y) =>
+const baseWalkable = (x, y) =>
   x >= 0 && y >= 0 && x < MW && y < MH && (map[y][x] === GRASS || map[y][x] === ROAD);
+const npcAt = (x, y) => NPCS.find((n) => n.tx === x && n.ty === y);
+const walkable = (x, y) => baseWalkable(x, y) && !npcAt(x, y);
 
 // Sprite Nino 16 x 16, tiap huruf satu warna
 const SPRITE = [
@@ -58,14 +60,34 @@ const SPRITE = [
 ];
 const PAL = { k: "#1a1a2e", h: "#4a3326", s: "#e8b98a", b: "#d9822b", p: "#2d3142", w: "#eeeeee" };
 
-const sprite = document.createElement("canvas");
-sprite.width = sprite.height = TS;
-const sc = sprite.getContext("2d");
-SPRITE.forEach((row, y) => [...row].forEach((ch, x) => {
-  if (ch === ".") return;
-  sc.fillStyle = PAL[ch];
-  sc.fillRect(x, y, 1, 1);
-}));
+function makeSprite(rows, pal) {
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = TS;
+  const c = cv.getContext("2d");
+  rows.forEach((row, y) => [...row].forEach((ch, x) => {
+    if (ch === ".") return;
+    c.fillStyle = pal[ch];
+    c.fillRect(x, y, 1, 1);
+  }));
+  return cv;
+}
+const sprite = makeSprite(SPRITE, PAL);
+
+// NPC sementara memakai badan yang sama dengan warna berbeda
+const NPCS = [
+  { name: "Ibu Nino", tx: 6, ty: 8, sprite: makeSprite(SPRITE, { ...PAL, h: "#2b2b2b", b: "#c2415d" }),
+    lines: [
+      "Nino, so malam baru pulang. Torang so masak ikan cakalang, makan dulu.",
+      "Ibu dengar gempa makin sering. HP-mu juga sering error to?",
+      "Kalau bajumu so kotor, bawa ke Ibu. Ibu cuci, gratis.",
+    ] },
+  { name: "Nenek Kael", tx: 12, ty: 8, sprite: makeSprite(SPRITE, { ...PAL, h: "#cfcfcf", b: "#5a7d9a" }),
+    lines: [
+      "Oh, Nino. Kael ada di dalam, main game terus dari tadi.",
+      "Anak itu kelihatan malas, tapi Nenek tahu dia sedang berjuang.",
+      "Kalau ada yang rusak, bawa ke Nenek. Nenek perbaiki.",
+    ] },
+];
 
 // Atlas tile, digambar sekali
 const atlas = document.createElement("canvas");
@@ -111,6 +133,22 @@ for (let t = 0; t < 5; t++) drawTile(t);
 const player = { tx: 9, ty: 3, x: 9 * TS, y: 3 * TS, path: [] };
 const target = { x: -1, y: -1 };
 const cam = { x: 0, y: 0 };
+const dlg = { npc: null, line: 0, shown: 0 };   // npc null berarti dialog tertutup
+let pending = null;                              // NPC yang akan diajak bicara setelah sampai
+const CPS = 40;                                  // karakter per detik
+
+const adjacent = (n) => Math.abs(n.tx - player.tx) + Math.abs(n.ty - player.ty) === 1;
+const atRest = () => player.x === player.tx * TS && player.y === player.ty * TS && player.path.length === 0;
+function openDialog(n) {
+  dlg.npc = n; dlg.line = 0; dlg.shown = 0;
+  pending = null; target.x = -1;
+}
+function advanceDialog() {
+  const text = dlg.npc.lines[dlg.line];
+  if (dlg.shown < text.length) { dlg.shown = text.length; return; }
+  if (++dlg.line >= dlg.npc.lines.length) { dlg.npc = null; return; }
+  dlg.shown = 0;
+}
 
 // Cari jalur terpendek 4 arah (BFS), null jika tidak bisa dicapai
 function findPath(sx, sy, ex, ey) {
@@ -135,6 +173,10 @@ function findPath(sx, sy, ex, ey) {
 }
 
 function update(dt) {
+  if (dlg.npc) {
+    dlg.shown = Math.min(dlg.npc.lines[dlg.line].length, dlg.shown + CPS * dt);
+    return;
+  }
   let move = SPEED * dt;
   while (move > 0) {
     const gx = player.tx * TS, gy = player.ty * TS;
@@ -152,6 +194,7 @@ function update(dt) {
       player.x += Math.sign(dx) * move; player.y += Math.sign(dy) * move; move = 0;
     }
   }
+  if (pending && atRest()) { if (adjacent(pending)) openDialog(pending); else pending = null; }
 }
 
 function updateCamera() {
@@ -179,17 +222,64 @@ function render(now) {
     ctx.lineWidth = 1;
     ctx.strokeRect(target.x * TS - cam.x + 1.5, target.y * TS - cam.y + 1.5, TS - 3, TS - 3);
   }
+  for (const n of NPCS) ctx.drawImage(n.sprite, n.tx * TS - cam.x, n.ty * TS - cam.y);
   ctx.drawImage(sprite, Math.round(player.x - cam.x), Math.round(player.y - cam.y));
+  if (dlg.npc) drawDialog();
+}
+
+function wrap(text, maxW) {
+  const out = [];
+  let line = "";
+  for (const w of text.split(" ")) {
+    const t = line ? line + " " + w : w;
+    if (line && ctx.measureText(t).width > maxW) { out.push(line); line = w; } else line = t;
+  }
+  if (line) out.push(line);
+  return out;
+}
+
+function drawDialog() {
+  const x = 4, y = 236, w = VW - 8, h = 80;
+  ctx.font = "8px monospace"; ctx.textBaseline = "top";
+  ctx.fillStyle = "#14142a"; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = "#e8e8f0"; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  ctx.fillStyle = "#ffe066"; ctx.fillRect(x + 6, y - 7, Math.ceil(ctx.measureText(dlg.npc.name).width) + 8, 12);
+  ctx.fillStyle = "#14142a"; ctx.fillText(dlg.npc.name, x + 10, y - 5);
+  const text = dlg.npc.lines[dlg.line];
+  ctx.fillStyle = "#f2f2f8";
+  let start = 0;
+  wrap(text, w - 16).forEach((ln, i) => {
+    ctx.fillText(ln.slice(0, Math.max(0, Math.floor(dlg.shown) - start)), x + 8, y + 10 + i * 11);
+    start += ln.length + 1;
+  });
+  if (dlg.shown >= text.length && Math.floor(performance.now() / 400) % 2 === 0) {
+    ctx.fillStyle = "#ffe066"; ctx.fillRect(x + w - 12, y + h - 10, 5, 3);
+  }
 }
 
 // Tap layar menjadi tile tujuan
 canvas.addEventListener("pointerdown", (e) => {
   e.preventDefault();
+  if (dlg.npc) { advanceDialog(); return; }
   const r = canvas.getBoundingClientRect();
   const tx = Math.floor(((e.clientX - r.left) * VW / r.width + cam.x) / TS);
   const ty = Math.floor(((e.clientY - r.top) * VH / r.height + cam.y) / TS);
+  const npc = npcAt(tx, ty);
+  if (npc) {
+    if (adjacent(npc)) { player.path = []; openDialog(npc); return; }
+    const spots = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+      .map(([dx, dy]) => findPath(player.tx, player.ty, tx + dx, ty + dy))
+      .filter(Boolean)
+      .sort((a, b) => a.length - b.length);
+    if (!spots.length) return;
+    player.path = spots[0]; pending = npc;
+    const end = spots[0][spots[0].length - 1];
+    target.x = end[0]; target.y = end[1];
+    return;
+  }
   const path = findPath(player.tx, player.ty, tx, ty);
   if (!path) return;
+  pending = null;
   player.path = path;
   target.x = tx; target.y = ty;
 });
@@ -216,7 +306,7 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // Dipakai untuk uji otomatis
-window.__recursio = { VW, VH, TS, MW, MH, map, player, cam, target };
+window.__recursio = { VW, VH, TS, MW, MH, map, player, cam, target, dlg, NPCS };
 </script>
 </body>
 </html>

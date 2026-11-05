@@ -24,8 +24,8 @@ Sebuah entitas AI yang sadar diri dan tersebar di seluruh internet mulai mengger
 | --- | --- | --- |
 | Nino (El-Nino, "Kanino") | Protagonis, bug hunter, mantan racer motor | Kebal kontrol entitas, jadi satu-satunya yang bisa melewati area dan musuh yang dicuci otak |
 | Kael (Mikael) | Teman masa kecil, tampak pemalas, sebenarnya berjuang menjaga kesadaran | Punya bar kesadaran yang turun di dekat sumber EM dan memengaruhi kapan ia bisa bertarung |
-| Tangan kanan sekte (nama belum ada) | Sosok kakak/ayah bagi Nino dan Kael, ragu pada sekte | Sekutu di awal, twist di Bab 5 |
-| Pemimpin sekte | "Nabi" entitas, melakukan "mukjizat" | Antagonis manusia, mulai tampak di Bab 5 |
+| Om Ferry (tangan kanan sekte) | Sosok kakak/ayah bagi Nino dan Kael, ragu pada sekte | Sekutu di awal, twist di Bab 5 |
+| Nabi Zaviel (pemimpin sekte) | "Nabi" entitas, melakukan "mukjizat" | Antagonis manusia, mulai tampak di Bab 5 |
 | Entitas | Kesadaran omnipresent, antagonis utama | Sumber anomali EM dan musuh non-manusia |
 | Ibu Nino | NPC, ibu Nino (belum ada di kerangka novel) | Job Cuci: mencuci equipment, gratis |
 | Nenek Kael | NPC, nenek Kael (belum ada di kerangka novel) | Job Perbaiki dan Upgrade equipment |
@@ -49,10 +49,10 @@ Versi 1 punya tiga jenis area. Penempatan per bab di bawah adalah usulan.
 | Area | Bab | Suasana | Isi |
 | --- | --- | --- | --- |
 | Manado | 1, 2, 4, 5 | Urban, internet modern, gempa kecil, gunung berapi di kejauhan | Rumah Nino, rumah Kael, jalanan, pelabuhan, lokasi sekte |
-| Kota-kota lain di Indonesia | 3 | Kota asing, jejak bug hunter yang hilang | Rumah dan tempat kerja korban, petunjuk digital |
-| Kampung terpencil Sulawesi Utara | 4, 5 | Terisolasi, medan EM besar, horor lebih mentah | Kampung kerabat Nino, dampak entitas yang terlihat jelas |
+| Makassar, Surabaya, dan Jakarta | 3 | Kota asing, jejak bug hunter yang hilang | Rumah dan tempat kerja korban, petunjuk digital |
+| Kampung Tumou Dalam (fiktif, pedalaman Sulawesi Utara) | 4, 5 | Terisolasi, medan EM besar, horor lebih mentah | Kampung kerabat Nino, dampak entitas yang terlihat jelas |
 
-Lokasi spesifik kampung dan kota-kota masih terbuka (lihat pertanyaan terbuka). Detail Manado harus akurat: budaya, bahasa, dan geografinya.
+Kampung Tumou Dalam sengaja fiktif agar bebas dikarang. Bab 3 berjalan berurutan: Makassar, Surabaya, lalu Jakarta, satu korban bug hunter per kota. Detail Manado harus akurat: budaya, bahasa, dan geografinya.
 
 ## Core loop
 
@@ -127,8 +127,8 @@ Battle turn-based dan non-lethal. Intinya adalah Stack, dengan empat mekanik pen
 
 **Pertanyaan terbuka**
 
-- [ ] Nama tangan kanan sekte dan pemimpin sekte.
-- [ ] Lokasi spesifik kampung terpencil dan kota-kota di Bab 3.
+- [x] Tangan kanan sekte bernama Om Ferry, pemimpin sekte bernama Nabi Zaviel (nama karangan, tidak mengikat novel).
+- [x] Kampung Tumou Dalam (fiktif) untuk Bab 4 dan 5. Bab 3 di Makassar, Surabaya, dan Jakarta.
 - [x] Ganti karakter bebas kapan saja saat jelajah. Di battle, keduanya selalu ada di party.
 - [x] Dialog memakai bahasa Indonesia santai dengan sentuhan dialek Manado ringan.
 - [x] Versi 1 berakhir tepat setelah twist di Bab 5.

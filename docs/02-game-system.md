@@ -8,7 +8,7 @@ Pertanyaan terbuka di PRD dijawab sementara dengan asumsi di bawah. Semua angka 
 
 - Ganti karakter bebas kapan saja saat jelajah. Di battle, Nino dan Kael selalu sama-sama ada di party.
 - Dialog memakai bahasa Indonesia santai dengan sentuhan dialek Manado ringan.
-- Nama tangan kanan sekte dan pemimpin sekte belum ditentukan, dipakai placeholder di data.
+- Tangan kanan sekte bernama Om Ferry dan pemimpin sekte bernama Nabi Zaviel (lihat PRD).
 - Versi 1 berakhir tepat setelah twist di Bab 5.
 - Level maksimum versi 1 adalah 10.
 
