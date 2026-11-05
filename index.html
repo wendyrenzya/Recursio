@@ -334,98 +334,177 @@ function roofCanvas(style) {
   return cv;
 }
 
-// ================================================================ karakter 16 x 24, 4 arah, 3 frame
-const c16 = (s) => { const l = (16 - s.length) >> 1; return ".".repeat(l) + s + ".".repeat(16 - s.length - l); };
+// ================================================================ karakter 20 x 34, 4 arah, 3 frame
+// Proporsi sekitar 2,5 kepala. Cahaya dari kiri atas: L terang, t dasar, T bayangan.
+// Huruf: o garis, h/H/d rambut, s/S kulit, e/w mata, m mulut, c kerah, k sabuk, p/P celana, b/B sepatu.
+const CW = 20, CH = 34;
 const HEAD = {
-  down: ["oooooooo", "ohhhhhhhho", "ohhhHHhhhhho", "ohhHHhhhhhho", "ohhhhhhhhhho", "ohhhhhhhhhho",
-         "ohhsssssshho", "ossessssesso", "ossessssesso", "ossssSSsssso", "osssssssso", "oooooooo"].map(c16),
-  up:   ["oooooooo", "ohhhhhhhho", "ohhhHHhhhhho", "ohhHHhhhhhho", "ohhhhhhhhhho", "ohhhhhhhhhho",
-         "ohhhhhhhhhho", "ohhhhhhhhhho", "ohhhhhhhhhho", "ohhhhhhhhhho", "ohhhhhhhho", "oooooooo"].map(c16),
-  left: ["oooooooo", "ohhhhhhhho", "ohhhHHhhhhho", "ohhHHhhhhhho", "ohhhhhhhhhho", "osshhhhhhhho",
-         "osssshhhhhho", "osesshhhhhho", "osesshhhhhho", "osssshhhhhho", "osssshhhho", "oooooooo"].map(c16),
+  down: [
+    "......oooooooo......",
+    "....oohHHHhhhhoo....",
+    "...ohHHHhhhhhhhdo...",
+    "..ohHHhhhhhhhhhddo..",
+    "..ohhhhhhhhhhhhddo..",
+    "..ohhhdhhhhdhhhhdo..",
+    "..ohdssssssssssdho..",
+    "..ohssoossssoossho..",
+    "..ohssewssssewsSho..",
+    "..ohSssssSsssssSho..",
+    "...oSssssmmssssSo...",
+    "....oSSssssssSSo....",
+    "......ooSSSSoo......",
+  ],
+  up: [
+    "......oooooooo......",
+    "....oohHHHhhhhoo....",
+    "...ohHHHhhhhhhhdo...",
+    "..ohHHhhhhhhhhhddo..",
+    "..ohhhhhhhhhhhhddo..",
+    "..ohhhhhhhhhhhhddo..",
+    "..ohhhhhhhhhhhhddo..",
+    "..ohhhhhhhhhhhdddo..",
+    "..ohhhhhhhhhhhdddo..",
+    "..odhhhhhhhhhhdddo..",
+    "...odhhhhhhhhddo....",
+    "....oddhhhhhddo.....",
+    "......ooSSSSoo......",
+  ],
+  left: [
+    "......oooooooo......",
+    "....oohHHHhhhhoo....",
+    "...ohHHHhhhhhhhdo...",
+    "..ohHHhhhhhhhhhddo..",
+    "..ohhhhhhhhhhhhddo..",
+    "..ohsshhhhhhhhhddo..",
+    "..osssshhhhhhhhddo..",
+    "..osoosshhhhhhhddo..",
+    "..osewsSShhhhhhddo..",
+    ".ossssssShhhhhdddo..",
+    "..oSmsssShhhhhddo...",
+    "...oSSsssohhhddo....",
+    ".....ooSSSoooo......",
+  ],
 };
 const TORSO = {
-  down: ["otttttttto", "oLLtttttttto", "otTttttttTto", "otTttttttTto", "osTttttttTso", "oppppppppo"].map(c16),
-  left: ["otttttto", "oLLtttto", "otTtttto", "otTtttto", "osTtttto", "oppppppo"].map(c16),
+  down: [
+    "....ooLLcccctToo....",
+    "...oLLLtttttttTTo...",
+    "..oLtoLttttttToTTo..",
+    "..oLtoLttttttToTTo..",
+    "..oLtoLttttttToTTo..",
+    "..oLtoLttttttToTTo..",
+    "..osSoLttttttTosSo..",
+    "..oSSokkkkkkkkoSSo..",
+    ".....opppppppPo.....",
+  ],
+  left: [
+    "......ooccttoo......",
+    ".....oLLttttttTo....",
+    "....oLLtttttttTTo...",
+    "....oLLtttttttTTo...",
+    "....oLLtttttttTTo...",
+    "....oLLtttttttTTo...",
+    "....oLttttttttTTo...",
+    "....okkkkkkkkkkko...",
+    ".....opppppppPo.....",
+  ],
 };
-TORSO.up = TORSO.down.map((r, i) => (i === 4 ? c16("otTttttttTto") : r));
+TORSO.up = TORSO.down.map((r) => r.replace(/c/g, "t"));
 
 function composeChar(o, dir, frame) {
-  const cv = mk(16, 24), c = cv.getContext("2d");
-  const pal = { o: o.ol || "#241a2e", h: o.hair[0], H: o.hair[1], s: o.skin[0], S: o.skin[1], e: "#2a1d2e",
-                t: o.top[0], T: o.top[1], L: o.top[2], p: o.pants[0], P: o.pants[1], b: o.shoe[0], B: o.shoe[1],
-                a: o.accent || "#f0d8c0", k: "#2a2a3a" };
+  const cv = mk(CW, CH), c = cv.getContext("2d");
+  const pal = { o: o.ol || "#24182c", h: o.hair[0], H: o.hair[1], d: o.hair[2], s: o.skin[0], S: o.skin[1],
+                e: "#24182c", w: "#ffffff", m: "#8a4038", c: o.collar || "#f2eee6",
+                t: o.top[0], T: o.top[1], L: o.top[2], k: o.belt || "#2a2230",
+                p: o.pants[0], P: o.pants[1], b: o.shoe[0], B: o.shoe[1], a: o.accent || "#f0d8c0", x: "#2a2a3a" };
   const bob = frame ? 1 : 0;                          // badan naik 1 piksel saat melangkah
   const put = (rows, y0) => rows.forEach((row, j) => [...row].forEach((ch, x) => {
     if (ch !== ".") P(c, pal[ch], x, y0 + j - bob);
   }));
   const side = dir === "left";
-  put(HEAD[dir], 1);
-  put(o.dress ? TORSO[dir].map((r, i) => (i === 5 ? r.replace(/p/g, "t") : r)) : TORSO[dir], 13);
-  const leg = (x0, lift, dark) => {                   // kaki: celana, sepatu, garis luar
-    const top = 19 - bob, n = 3 - lift;
-    R(c, pal.o, x0 - 1, top, 5, n + 2);
-    R(c, dark ? pal.P : pal.p, x0, top, 3, n);
-    if (!dark) R(c, pal.P, x0 + 2, top, 1, n);
-    R(c, pal.b, x0, top + n, 3, 1); P(c, pal.B, x0, top + n);
+  // kaki digambar dulu agar ujung baju menutup pangkalnya
+  const leg = (x0, lift, back) => {
+    const top = 24 - bob, n = 7 - lift;
+    R(c, pal.o, x0 - 1, top, 5, n + 3);
+    R(c, back ? pal.P : pal.p, x0, top, 3, n);
+    if (!back) { R(c, pal.P, x0 + 2, top, 1, n); P(c, pal.p, x0 + 1, top + 3); }
+    R(c, pal.b, x0, top + n, 3, 2); P(c, pal.B, x0, top + n); R(c, pal.o, x0 - 1, top + n + 2, 5, 1);
+    if (side) { P(c, pal.o, x0 - 2, top + n + 1); P(c, pal.b, x0 - 1, top + n + 1); }   // ujung sepatu ke depan
   };
   if (o.dress) {
-    R(c, pal.o, 3, 19 - bob, 10, 1); R(c, pal.t, 4, 19 - bob, 8, 1);
-    R(c, pal.o, 2, 20 - bob, 12, 2); R(c, pal.t, 3, 20 - bob, 10, 1); R(c, pal.T, 3, 21 - bob, 10, 1);
-    P(c, pal.L, 4, 20 - bob); P(c, pal.L, 5, 20 - bob);
-    const foot = (x0, lift) => { R(c, pal.s, x0 + 1, 22 - lift - bob, 2, 1); R(c, pal.b, x0, 23 - lift - bob, 3, 1); };
-    if (side) foot(6, frame === 1 ? 1 : 0);
-    else { foot(4, frame === 2 ? 1 : 0); foot(9, frame === 1 ? 1 : 0); }
+    for (let r = 0; r < 7; r++) {                     // rok melebar ke bawah
+      const y = 24 + r - bob, half = 4 + Math.floor(r / 2);
+      R(c, pal.o, 10 - half - 1, y, half * 2 + 2, 1);
+      R(c, pal.t, 10 - half, y, half * 2, 1);
+      R(c, pal.T, 10 + half - 2, y, 2, 1); P(c, pal.L, 10 - half, y);
+      if (r === 6) R(c, pal.T, 10 - half, y, half * 2, 1);
+    }
+    const foot = (x0, lift) => {
+      const y = 31 - lift - bob;
+      R(c, pal.S, x0 + 1, y, 1, 1);
+      R(c, pal.o, x0 - 1, y + 1, 5, 2); R(c, pal.b, x0, y + 1, 3, 1);
+    };
+    if (side) { foot(7 + (frame === 1 ? -1 : frame === 2 ? 1 : 0), frame === 1 ? 1 : 0); }
+    else { foot(6, frame === 2 ? 1 : 0); foot(11, frame === 1 ? 1 : 0); }
   } else if (side) {
-    const f = frame === 0 ? 0 : (frame === 1 ? -2 : 2);
-    leg(6 - f, frame === 1 ? 1 : 0, true);            // kaki belakang
-    leg(6 + f, frame === 2 ? 1 : 0, false);
+    const f = frame === 0 ? 0 : (frame === 1 ? -3 : 3);
+    leg(8 - f, frame === 1 ? 2 : 0, true);            // kaki belakang
+    leg(8 + f, frame === 2 ? 2 : 0, false);
   } else {
-    leg(4, frame === 2 ? 1 : 0, false);
-    leg(9, frame === 1 ? 1 : 0, false);
+    leg(6, frame === 2 ? 2 : 0, false);
+    leg(11, frame === 1 ? 2 : 0, false);
+  }
+  put(o.dress ? TORSO[dir].map((r, i) => (i === 8 ? r.replace(/p/g, "t").replace(/P/g, "T") : r)) : TORSO[dir], 15);
+  put(HEAD[dir], 2);
+  if (side) {                                         // lengan mengayun di tampak samping
+    const sw = frame === 0 ? 0 : (frame === 1 ? 1 : -1);
+    for (let r = 0; r < 6; r++) {
+      const x = 9 + (r > 2 ? sw : 0), y = 16 + r - bob;
+      P(c, pal.o, x - 1, y); P(c, r < 4 ? pal.L : pal.s, x, y); P(c, r < 4 ? pal.T : pal.S, x + 1, y);
+    }
+    P(c, pal.o, 9 + sw, 22 - bob); P(c, pal.o, 10 + sw, 22 - bob); P(c, pal.T, 11, 16 - bob);
   }
   for (const [x, y, ch] of (o.patch && o.patch[dir]) || []) P(c, pal[ch] || ch, x, y - bob);
   return cv;
 }
 
-// Satu lembar 192 x 24: arah bawah, atas, kiri, kanan, masing-masing 3 frame
+// Satu lembar 240 x 34: arah bawah, atas, kiri, kanan, masing-masing 3 frame
 const DIRS = ["down", "up", "left", "right"];
 function makeSheet(o) {
-  const cv = mk(16 * 12, 24), c = cv.getContext("2d");
+  const cv = mk(CW * 12, CH), c = cv.getContext("2d");
   for (let f = 0; f < 3; f++) {
-    c.drawImage(composeChar(o, "down", f), f * 16, 0);
-    c.drawImage(composeChar(o, "up", f), (3 + f) * 16, 0);
+    c.drawImage(composeChar(o, "down", f), f * CW, 0);
+    c.drawImage(composeChar(o, "up", f), (3 + f) * CW, 0);
     const l = composeChar(o, "left", f);
-    c.drawImage(l, (6 + f) * 16, 0);
-    c.save(); c.translate((9 + f) * 16 + 16, 0); c.scale(-1, 1); c.drawImage(l, 0, 0); c.restore();
+    c.drawImage(l, (6 + f) * CW, 0);
+    c.save(); c.translate((9 + f) * CW + CW, 0); c.scale(-1, 1); c.drawImage(l, 0, 0); c.restore();
   }
   return cv;
 }
 
-const headset = {
-  down: [[1, 6, "k"], [2, 6, "k"], [1, 7, "k"], [1, 8, "k"], [1, 9, "k"], [2, 9, "k"], [2, 7, "a"], [2, 8, "a"],
-         [13, 6, "k"], [14, 6, "k"], [14, 7, "k"], [14, 8, "k"], [14, 9, "k"], [13, 9, "k"], [13, 7, "a"], [13, 8, "a"],
-         [3, 2, "k"], [12, 2, "k"], [4, 1, "k"], [11, 1, "k"], [5, 1, "k"], [10, 1, "k"]],
-  left: [[6, 6, "k"], [7, 6, "k"], [8, 6, "k"], [6, 7, "k"], [7, 7, "a"], [8, 7, "k"], [6, 8, "k"], [7, 8, "a"],
-         [8, 8, "k"], [6, 9, "k"], [7, 9, "k"], [8, 9, "k"], [5, 1, "k"], [6, 1, "k"], [7, 1, "k"], [8, 1, "k"]],
-};
-headset.up = headset.down;
-const bun = (d, l) => [[6, 0, "o"], [7, 0, d], [8, 0, l], [9, 0, "o"]];
-const glasses = [[4, 6, "k"], [5, 6, "k"], [6, 6, "k"], [4, 9, "k"], [5, 9, "k"], [6, 9, "k"], [4, 7, "k"], [4, 8, "k"],
-                 [6, 7, "k"], [6, 8, "k"], [9, 6, "k"], [10, 6, "k"], [11, 6, "k"], [9, 9, "k"], [10, 9, "k"], [11, 9, "k"],
-                 [9, 7, "k"], [9, 8, "k"], [11, 7, "k"], [11, 8, "k"], [7, 7, "k"], [8, 7, "k"]];
+// Ciri tiap karakter, koordinat di kanvas 20 x 34 (kepala mulai baris 2)
+const spikes = [[6, 1, "o"], [7, 1, "o"], [7, 2, "H"], [10, 0, "o"], [10, 1, "H"], [11, 1, "o"], [13, 1, "o"], [14, 2, "o"], [13, 2, "h"]];
+const headsetDown = [[4, 3, "x"], [5, 2, "x"], [6, 1, "x"], [7, 1, "x"], [8, 1, "x"], [9, 1, "x"], [10, 1, "x"], [11, 1, "x"], [12, 1, "x"], [13, 1, "x"], [14, 2, "x"], [15, 3, "x"],
+  ...[8, 9, 10, 11].flatMap((y) => [[1, y, "x"], [2, y, "x"], [17, y, "x"], [18, y, "x"]]), [2, 9, "a"], [2, 10, "a"], [17, 9, "a"], [17, 10, "a"]];
+const headsetLeft = [[6, 1, "x"], [7, 1, "x"], [8, 1, "x"], [9, 1, "x"], [10, 1, "x"], [11, 1, "x"], [12, 2, "x"],
+  ...[8, 9, 10, 11].flatMap((y) => [[10, y, "x"], [11, y, "x"], [12, y, "x"]]), [11, 9, "a"], [11, 10, "a"]];
+const bun = [[8, 0, "o"], [9, 0, "o"], [10, 0, "o"], [11, 0, "o"], [7, 1, "o"], [8, 1, "H"], [9, 1, "h"], [10, 1, "h"], [11, 1, "d"], [12, 1, "o"]];
+const glasses = [[5, 9, "x"], [6, 9, "x"], [7, 9, "x"], [8, 9, "x"], [5, 10, "x"], [8, 10, "x"], [5, 11, "x"], [6, 11, "x"], [7, 11, "x"], [8, 11, "x"],
+  [11, 9, "x"], [12, 9, "x"], [13, 9, "x"], [14, 9, "x"], [11, 10, "x"], [14, 10, "x"], [11, 11, "x"], [12, 11, "x"], [13, 11, "x"], [14, 11, "x"], [9, 10, "x"], [10, 10, "x"]];
 
 const CHARS = {
-  nino: { hair: ["#2a2230", "#524761"], skin: ["#c98d63", "#a36a4a"], top: ["#e0702c", "#b24a22", "#f4a24a"],
-          pants: ["#2f3d6e", "#1f2a4d"], shoe: ["#eeeef4", "#ffffff"], patch: { down: [[13, 8, "a"]], up: [[13, 8, "a"]] } },
-  kael: { hair: ["#6a4630", "#8c6444"], skin: ["#dcaa80", "#b4825e"], top: ["#7a8498", "#586075", "#a2abbd"],
-          pants: ["#3c3c4a", "#2a2a36"], shoe: ["#4c4c5e", "#6a6a80"], patch: headset, accent: "#35d0c0" },
-  ibu:  { hair: ["#2b2326", "#4a3b40"], skin: ["#c58a5e", "#9f6a46"], top: ["#c2415d", "#8f2c47", "#e46a82"], dress: true,
-          pants: ["#c2415d", "#8f2c47"], shoe: ["#5a3a30", "#7a5646"],
-          patch: { down: bun("#2b2326", "#4a3b40"), up: bun("#2b2326", "#4a3b40"), left: bun("#2b2326", "#4a3b40") } },
-  nenek: { hair: ["#a6a6bd", "#e2e2ee"], skin: ["#cf9c72", "#a97a54"], top: ["#6c9380", "#4b705e", "#8cb59f"], dress: true,
-           pants: ["#6c9380", "#4b705e"], shoe: ["#6a4a3a", "#86644e"],
-           patch: { down: bun("#a6a6bd", "#e2e2ee").concat(glasses), up: bun("#a6a6bd", "#e2e2ee"), left: bun("#a6a6bd", "#e2e2ee") } },
+  nino: { hair: ["#2a2433", "#55496a", "#17121f"], skin: ["#c98d63", "#9e6646"], top: ["#e0702c", "#a8461f", "#f7a650"],
+          collar: "#f2eee6", pants: ["#34437a", "#212c55"], shoe: ["#e8e8f0", "#ffffff"], belt: "#3a2a24",
+          patch: { down: [...spikes, [17, 10, "a"], [17, 11, "a"]], up: [...spikes, [17, 10, "a"]], left: spikes } },
+  kael: { hair: ["#6a4630", "#94704c", "#432a1e"], skin: ["#dcaa80", "#b07c58"], top: ["#7a8498", "#545b70", "#a8b1c4"],
+          collar: "#5a6276", pants: ["#3c3c4a", "#262632"], shoe: ["#4c4c5e", "#70708a"], accent: "#35d0c0",
+          patch: { down: headsetDown, up: headsetDown, left: headsetLeft } },
+  ibu:  { hair: ["#2b2326", "#56464c", "#17111a"], skin: ["#c58a5e", "#9a6442"], top: ["#c2415d", "#8a2a45", "#e8718a"], dress: true,
+          collar: "#f0d0a0", pants: ["#c2415d", "#8a2a45"], shoe: ["#5a3a30", "#7a5646"], belt: "#f0d0a0",
+          patch: { down: bun, up: bun, left: bun } },
+  nenek: { hair: ["#a8a8be", "#e6e6f0", "#7a7a92"], skin: ["#cf9c72", "#a47450"], top: ["#6c9380", "#476a59", "#93bba5"], dress: true,
+           collar: "#e8e0c8", pants: ["#6c9380", "#476a59"], shoe: ["#6a4a3a", "#86644e"], belt: "#4a3a2a",
+           patch: { down: [...bun, ...glasses], up: bun, left: bun } },
 };
 
 // ================================================================ keadaan permainan
@@ -742,7 +821,7 @@ const contactTex = (() => {
   c.fillStyle = g; c.fillRect(0, 0, 32, 32);
   return new THREE.CanvasTexture(cv);
 })();
-const charGeo = billboardGeo(1, 1.5);
+const charGeo = billboardGeo(CW / 16, CH / 16);
 function makeActor(charKey) {
   const tex = pix(makeSheet(CHARS[charKey]));
   tex.repeat.set(1 / 12, 1);
@@ -963,7 +1042,7 @@ function tileToScreen(tx, ty) {
   const r = glCanvas.getBoundingClientRect();
   return { x: r.left + (p.x * 0.5 + 0.5) * r.width, y: r.top + (-p.y * 0.5 + 0.5) * r.height, left: r.left, top: r.top, w: r.width, h: r.height };
 }
-window.__recursio = { VW, VH, TS, MW, MH, map, player, cam, target, dlg, NPCS, CHARS, CAM_BOUNDS, tileToScreen };
+window.__recursio = { VW, VH, TS, MW, MH, map, player, cam, target, dlg, NPCS, CHARS, CAM_BOUNDS, tileToScreen, makeSheet };
 </script>
 </body>
 </html>
