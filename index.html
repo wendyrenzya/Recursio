@@ -15,122 +15,436 @@
 <script>
 "use strict";
 
+// ---------------------------------------------------------------- dasar
 // Resolusi internal 180 x 320, tile 16 px, kecepatan jalan 4 tile per detik
 const VW = 180, VH = 320, TS = 16, SPEED = 64;
-const GRASS = 0, ROAD = 1, WALL = 2, TREE = 3, WATER = 4;
+const GRASS = 0, ROAD = 1, HOUSE = 2, TREE = 3, WATER = 4, FOREST = 5, PALM = 6;   // tipe > 1 menghalangi jalan
 
-// Peta langkah 1: 20 x 32 tile, dibuat dari persegi panjang
+const hash = (x, y, s = 0) => {
+  let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(s, 1274126177)) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
+  return (h ^ (h >>> 16)) >>> 0;
+};
+const mk = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; };
+const P = (c, col, x, y) => { c.fillStyle = col; c.fillRect(x, y, 1, 1); };
+const R = (c, col, x, y, w, h) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
+
+// ---------------------------------------------------------------- palet
+// Tiap warna punya tangga terang ke gelap, bayangan bergeser ke ungu dan sorotan ke kuning
+const C = {
+  ol: "#1c1630",
+  g0: "#1b4332", g1: "#2a6038", g2: "#3a7d44", g3: "#51a050", g4: "#7cc263", g5: "#b1de7c",
+  d0: "#4a3427", d1: "#6b4d38", d2: "#8c6a48", d3: "#a98558", d4: "#c4a36d", d5: "#dcc08a",
+  s2: "#d8c08a", s3: "#ecdcaa",
+  w0: "#1f3a6b", w1: "#2c5594", w2: "#3a74b8", w3: "#5c9bd6", w4: "#9ccbe8", w5: "#e4f4fa",
+  r0: "#5e2234", r1: "#8c3340", r2: "#b94a47", r3: "#d9694f", r4: "#ef9a68",
+  t0: "#3a424f", t1: "#58667a", t2: "#7b8ca3", t3: "#a6b6c9", t4: "#d3deea",
+  b0: "#3b2430", b1: "#5c3a38", b2: "#855436", b3: "#a8744a", b4: "#cf9a66",
+  wl0: "#a8884f", wl1: "#c8a661", wl2: "#e0c27c", wl3: "#f0dc9e",
+  gy1: "#6a6678", gy2: "#908ca0", gy3: "#b9b6c6",
+};
+
+// ---------------------------------------------------------------- font bitmap 5x7
+// Tiap karakter 7 baris (9 untuk huruf berekor g j p q y), 5 bit per baris. Lebar proporsional dihitung dari bit terpakai.
+const FONT_SRC = {
+  " ": "00 00 00 00 00 00 00",
+  "A": "0E 11 11 1F 11 11 11", "B": "1E 11 11 1E 11 11 1E", "C": "0E 11 10 10 10 11 0E",
+  "D": "1E 11 11 11 11 11 1E", "E": "1F 10 10 1E 10 10 1F", "F": "1F 10 10 1E 10 10 10",
+  "G": "0E 11 10 17 11 11 0F", "H": "11 11 11 1F 11 11 11", "I": "0E 04 04 04 04 04 0E",
+  "J": "07 02 02 02 02 12 0C", "K": "11 12 14 18 14 12 11", "L": "10 10 10 10 10 10 1F",
+  "M": "11 1B 15 15 11 11 11", "N": "11 11 19 15 13 11 11", "O": "0E 11 11 11 11 11 0E",
+  "P": "1E 11 11 1E 10 10 10", "Q": "0E 11 11 11 15 12 0D", "R": "1E 11 11 1E 14 12 11",
+  "S": "0F 10 10 0E 01 01 1E", "T": "1F 04 04 04 04 04 04", "U": "11 11 11 11 11 11 0E",
+  "V": "11 11 11 11 11 0A 04", "W": "11 11 11 15 15 15 0A", "X": "11 11 0A 04 0A 11 11",
+  "Y": "11 11 11 0A 04 04 04", "Z": "1F 01 02 04 08 10 1F",
+  "a": "00 00 0E 01 0F 11 0F", "b": "10 10 16 19 11 11 1E", "c": "00 00 0E 10 10 11 0E",
+  "d": "01 01 0D 13 11 11 0F", "e": "00 00 0E 11 1F 10 0E", "f": "06 09 08 1C 08 08 08",
+  "g": "00 00 0F 11 11 11 0F 01 0E", "h": "10 10 16 19 11 11 11", "i": "04 00 0C 04 04 04 0E",
+  "j": "02 00 06 02 02 02 02 12 0C", "k": "10 10 12 14 18 14 12", "l": "0C 04 04 04 04 04 0E",
+  "m": "00 00 1A 15 15 11 11", "n": "00 00 16 19 11 11 11", "o": "00 00 0E 11 11 11 0E",
+  "p": "00 00 1E 11 11 11 1E 10 10", "q": "00 00 0F 11 11 11 0F 01 01", "r": "00 00 16 19 10 10 10",
+  "s": "00 00 0E 10 0E 01 1E", "t": "08 08 1C 08 08 09 06", "u": "00 00 11 11 11 13 0D",
+  "v": "00 00 11 11 11 0A 04", "w": "00 00 11 11 15 15 0A", "x": "00 00 11 0A 04 0A 11",
+  "y": "00 00 11 11 11 11 0F 01 0E", "z": "00 00 1F 02 04 08 1F",
+  "0": "0E 11 13 15 19 11 0E", "1": "04 0C 04 04 04 04 0E", "2": "0E 11 01 02 04 08 1F",
+  "3": "1F 02 04 02 01 11 0E", "4": "02 06 0A 12 1F 02 02", "5": "1F 10 1E 01 01 11 0E",
+  "6": "06 08 10 1E 11 11 0E", "7": "1F 01 02 04 08 08 08", "8": "0E 11 11 0E 11 11 0E",
+  "9": "0E 11 11 0F 01 02 0C",
+  ".": "00 00 00 00 00 0C 0C", ",": "00 00 00 00 0C 04 08", "!": "04 04 04 04 04 00 04",
+  "?": "0E 11 01 02 04 00 04", ":": "00 0C 0C 00 0C 0C 00", "'": "0C 04 08 00 00 00 00",
+  "-": "00 00 00 1F 00 00 00", "(": "02 04 08 08 08 04 02", ")": "08 04 02 02 02 04 08",
+};
+const FONT = {};
+for (const [ch, src] of Object.entries(FONT_SRC)) {
+  const rows = src.split(" ").map((h) => parseInt(h, 16));
+  let w = 0;
+  for (const r of rows) for (let b = 0; b < 5; b++) if (r & (16 >> b)) w = Math.max(w, b + 1);
+  FONT[ch] = { rows, w: ch === " " ? 3 : w };
+}
+const textW = (s) => [...s].reduce((a, ch) => a + (FONT[ch] || FONT["?"]).w + 1, 0) - 1;
+function drawText(c, s, x, y, col, shadow) {
+  let cx = x;
+  for (const ch of s) {
+    const g = FONT[ch] || FONT["?"];
+    g.rows.forEach((r, j) => {
+      for (let b = 0; b < g.w; b++) if (r & (16 >> b)) {
+        if (shadow) P(c, shadow, cx + b + 1, y + j + 1);
+        P(c, col, cx + b, y + j);
+      }
+    });
+    cx += g.w + 1;
+  }
+}
+
+// ---------------------------------------------------------------- peta
 const MW = 20, MH = 32;
 const map = Array.from({ length: MH }, () => new Array(MW).fill(GRASS));
-const fill = (x, y, w, h, t) => {
-  for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) map[j][i] = t;
-};
-fill(0, 0, MW, 1, WALL); fill(0, MH - 1, MW, 1, WALL);   // pagar luar
-fill(0, 0, 1, MH, WALL); fill(MW - 1, 0, 1, MH, WALL);
-fill(9, 1, 2, MH - 2, ROAD);                              // jalan utama
-fill(1, 20, 18, 2, ROAD);                                 // jalan melintang
-fill(3, 4, 4, 3, WALL);  fill(4, 7, 6, 1, ROAD);          // rumah Nino dan jalannya
-fill(13, 4, 4, 3, WALL); fill(10, 7, 6, 1, ROAD);         // rumah Kael dan jalannya
-fill(2, 12, 2, 2, TREE); fill(15, 12, 3, 2, TREE); fill(3, 24, 2, 3, TREE);
-fill(13, 24, 5, 4, WATER);
+const fill = (x, y, w, h, t) => { for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) map[j][i] = t; };
+fill(0, 0, MW, 1, FOREST); fill(0, MH - 1, MW, 1, FOREST);   // hutan di pinggir peta
+fill(0, 0, 1, MH, FOREST); fill(MW - 1, 0, 1, MH, FOREST);
+fill(9, 1, 2, MH - 2, ROAD);                                  // jalan utama
+fill(1, 20, 18, 2, ROAD);                                     // jalan melintang
+fill(3, 4, 4, 3, HOUSE);  fill(4, 7, 6, 1, ROAD);             // rumah Nino dan jalannya
+fill(13, 4, 4, 3, HOUSE); fill(10, 7, 6, 1, ROAD);            // rumah Kael dan jalannya
+fill(13, 24, 5, 4, WATER);                                    // kolam
+const put = (t, pts) => pts.forEach(([x, y]) => { map[y][x] = t; });
+put(TREE, [[2, 11], [3, 14], [15, 12], [17, 14], [16, 17], [2, 17], [6, 28], [17, 19]]);
+put(PALM, [[7, 11], [13, 11], [1, 24], [4, 25], [12, 29], [18, 23], [7, 16], [14, 17], [2, 28]]);
 
 const baseWalkable = (x, y) =>
   x >= 0 && y >= 0 && x < MW && y < MH && (map[y][x] === GRASS || map[y][x] === ROAD);
-const npcAt = (x, y) => NPCS.find((n) => n.tx === x && n.ty === y);
-const walkable = (x, y) => baseWalkable(x, y) && !npcAt(x, y);
 
-// Sprite Nino 16 x 16, tiap huruf satu warna
-const SPRITE = [
-  "................",
-  "....kkkkkkkk....",
-  "...khhhhhhhhk...",
-  "...khhhhhhhhk...",
-  "...khhssssshk...",
-  "...kssksskssk...",
-  "...kssssssssk...",
-  ".....kkkkkk.....",
-  "....kbbbbbbk....",
-  "...kbbbbbbbbk...",
-  "...ksbbbbbbsk...",
-  "...ksbbbbbbsk...",
-  "....kbbbbbbk....",
-  "....kppppppk....",
-  "....kppkkppk....",
-  "....kwwk.kwwk...",
-];
-const PAL = { k: "#1a1a2e", h: "#4a3326", s: "#e8b98a", b: "#d9822b", p: "#2d3142", w: "#eeeeee" };
+// ---------------------------------------------------------------- tile tanah (digambar sekali)
+const isRoadLike = (x, y) => { const t = map[y] && map[y][x]; return t === ROAD || t === HOUSE; };
+const isWater = (x, y) => { const t = map[y] && map[y][x]; return t === WATER; };
 
-function makeSprite(rows, pal) {
-  const cv = document.createElement("canvas");
-  cv.width = cv.height = TS;
-  const c = cv.getContext("2d");
-  rows.forEach((row, y) => [...row].forEach((ch, x) => {
-    if (ch === ".") return;
-    c.fillStyle = pal[ch];
-    c.fillRect(x, y, 1, 1);
-  }));
+function drawGrass(c, ox, oy, tx, ty) {
+  R(c, C.g2, ox, oy, TS, TS);
+  for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) {
+    const h = hash(tx * TS + x, ty * TS + y, 1) % 100;
+    if (h < 6) P(c, C.g3, ox + x, oy + y); else if (h < 11) P(c, C.g1, ox + x, oy + y);
+  }
+  for (let k = 0; k < 2; k++) {                       // rumpun rumput kecil
+    const h = hash(tx, ty, 10 + k);
+    if (h % 3 === 0) continue;
+    const x = 2 + (h >> 4) % 12, y = 3 + (h >> 9) % 11;
+    P(c, C.g4, ox + x, oy + y - 1); P(c, C.g3, ox + x - 1, oy + y); P(c, C.g4, ox + x + 1, oy + y);
+    P(c, C.g1, ox + x, oy + y);
+  }
+  const f = hash(tx, ty, 20) % 11;                    // bunga
+  if (f < 2) {
+    const cols = [["#f4f0e6", "#f2c94c"], ["#f08aa8", "#f2c94c"], ["#f2c94c", "#e07a2c"]][hash(tx, ty, 21) % 3];
+    for (let k = 0; k < 2; k++) {
+      const x = 3 + (hash(tx, ty, 22 + k) % 10), y = 4 + (hash(tx, ty, 24 + k) % 9);
+      P(c, C.g1, ox + x, oy + y + 1);
+      P(c, cols[0], ox + x - 1, oy + y); P(c, cols[0], ox + x + 1, oy + y);
+      P(c, cols[0], ox + x, oy + y - 1); P(c, cols[1], ox + x, oy + y);
+    }
+  }
+}
+
+function drawRoad(c, ox, oy, tx, ty) {
+  const open = [!isRoadLike(tx, ty - 1), !isRoadLike(tx, ty + 1),
+                !isRoadLike(tx - 1, ty), !isRoadLike(tx + 1, ty)];            // atas, bawah, kiri, kanan
+  for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) {
+    const wx = tx * TS + x, wy = ty * TS + y;
+    const h = hash(wx, wy, 3) % 100;
+    let col = h < 14 ? C.d4 : h < 24 ? C.d2 : C.d3;
+    if (h > 96) col = C.d1;
+    // jarak ke sisi yang berbatasan dengan rumput
+    let d = 99, ew = 0;
+    if (open[0] && y < d) { d = y; ew = wx; }
+    if (open[1] && 15 - y < d) { d = 15 - y; ew = wx; }
+    if (open[2] && x < d) { d = x; ew = wy; }
+    if (open[3] && 15 - x < d) { d = 15 - x; ew = wy; }
+    if (d < 99) {
+      const wv = 2 + (hash(ew, 7, 5) % 3 === 0 ? 1 : 0);
+      if (d < wv - 1) col = hash(wx, wy, 6) % 3 ? C.g2 : C.g1;
+      else if (d === wv - 1) col = C.d1;
+      else if (d === wv) col = C.d2;
+    }
+    P(c, col, ox + x, oy + y);
+  }
+  for (let k = 0; k < 2; k++) {                       // kerikil
+    const h = hash(tx, ty, 30 + k);
+    if (h % 4) continue;
+    const x = 4 + (h >> 4) % 7, y = 4 + (h >> 9) % 7;
+    P(c, C.d1, ox + x, oy + y + 1); P(c, C.d1, ox + x + 1, oy + y + 1); P(c, C.d5, ox + x, oy + y);
+  }
+}
+
+function drawWater(c, ox, oy, tx, ty) {
+  R(c, C.w2, ox, oy, TS, TS);
+  for (let y = 0; y < TS; y++) if ((ty * TS + y) % 5 === 0) R(c, C.w1, ox, oy + y, TS, 1);
+  const open = [!isWater(tx, ty - 1), !isWater(tx, ty + 1), !isWater(tx - 1, ty), !isWater(tx + 1, ty)];
+  for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) {
+    let d = 99;
+    if (open[0]) d = Math.min(d, y);
+    if (open[1]) d = Math.min(d, 15 - y);
+    if (open[2]) d = Math.min(d, x);
+    if (open[3]) d = Math.min(d, 15 - x);
+    if (d === 0) P(c, C.d1, ox + x, oy + y);
+    else if (d === 1) P(c, C.s2, ox + x, oy + y);
+    else if (d === 2) P(c, C.s3, ox + x, oy + y);
+    else if (d === 3 && hash(tx * TS + x, ty * TS + y, 8) % 3) P(c, C.w4, ox + x, oy + y);
+  }
+}
+
+function drawForest(c, ox, oy, tx, ty) {
+  R(c, C.g0, ox, oy, TS, TS);
+  const blobs = [];
+  for (let k = 0; k < 4; k++) {
+    const h = hash(tx, ty, 40 + k);
+    blobs.push([(h % 14) + 1, ((h >> 5) % 12) + 2, 4 + ((h >> 10) % 3)]);
+  }
+  for (const [bx, by, br] of blobs) {
+    for (let y = -br; y <= br; y++) for (let x = -br; x <= br; x++) {
+      if (x * x + y * y > br * br) continue;
+      const px = bx + x, py = by + y;
+      if (px < 0 || py < 0 || px >= TS || py >= TS) continue;
+      const light = (-x * 0.6 - y * 0.9) / br;
+      const v = light + (hash(tx * TS + px, ty * TS + py, 9) % 5) * 0.12;
+      P(c, v > 0.75 ? C.g4 : v > 0.3 ? C.g3 : v > -0.25 ? C.g2 : C.g1, ox + px, oy + py);
+    }
+  }
+  for (let k = 0; k < 5; k++) {
+    const h = hash(tx, ty, 50 + k);
+    P(c, C.g0, ox + (h % 16), oy + ((h >> 6) % 16));
+  }
+}
+
+function buildGround() {
+  const cv = mk(MW * TS, MH * TS), c = cv.getContext("2d");
+  for (let ty = 0; ty < MH; ty++) for (let tx = 0; tx < MW; tx++) {
+    const t = map[ty][tx], ox = tx * TS, oy = ty * TS;
+    if (t === ROAD) drawRoad(c, ox, oy, tx, ty);
+    else if (t === WATER) drawWater(c, ox, oy, tx, ty);
+    else if (t === FOREST) drawForest(c, ox, oy, tx, ty);
+    else drawGrass(c, ox, oy, tx, ty);
+  }
   return cv;
 }
-const sprite = makeSprite(SPRITE, PAL);
 
-// NPC sementara memakai badan yang sama dengan warna berbeda
+// ---------------------------------------------------------------- objek besar: pohon, palem, rumah
+function blob(w, h, circles, light, ramp, olCol, seed) {
+  const cv = mk(w, h), c = cv.getContext("2d");
+  const mask = Array.from({ length: h }, () => new Array(w).fill(false));
+  for (const [cx, cy, r] of circles) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++)
+    if ((x - cx) ** 2 + (y - cy) ** 2 <= r * r + 1) mask[y][x] = true;
+  const [lx, ly, lr] = light;
+  const m = (x, y) => y >= 0 && y < h && x >= 0 && x < w && mask[y][x];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (!mask[y][x]) continue;
+    if (!m(x, y - 1) || !m(x, y + 1) || !m(x - 1, y) || !m(x + 1, y)) { P(c, olCol, x, y); continue; }
+    const d = (Math.hypot(x - lx, y - ly) / lr) + ((hash(x, y, seed) % 5) - 2) * 0.07;
+    P(c, ramp[Math.max(0, Math.min(ramp.length - 1, Math.floor(d * ramp.length)))], x, y);
+  }
+  return { cv, c };
+}
+
+function makeTree(seed) {
+  const { cv, c } = blob(16, 24, [[8, 8, 7], [4, 11, 4], [12, 11, 4], [8, 12, 5]], [6, 5, 14],
+    [C.g5, C.g4, C.g3, C.g2, C.g1, C.g0], "#143122", seed);
+  R(c, C.ol, 6, 17, 4, 7); R(c, C.b3, 7, 17, 1, 6); R(c, C.b2, 8, 17, 1, 6);          // batang
+  P(c, C.b4, 7, 18); P(c, C.b1, 8, 20); P(c, C.b1, 7, 21);
+  R(c, C.ol, 5, 22, 6, 2); R(c, C.b2, 6, 22, 4, 1); P(c, C.b1, 9, 22);
+  for (let k = 0; k < 7; k++) {                       // helai daun
+    const h = hash(seed, k, 3);
+    const x = 3 + (h % 10), y = 3 + ((h >> 4) % 10);
+    P(c, C.g5, x, y); P(c, C.g4, x + 1, y + 1);
+  }
+  return cv;
+}
+
+function makePalm(seed) {
+  const cv = mk(16, 24), c = cv.getContext("2d");
+  const bend = seed % 2 ? 1 : -1;
+  for (let y = 23; y >= 10; y--) {                    // batang melengkung
+    const t = (23 - y) / 13;
+    const x = Math.round(7 + bend * 3 * t * t);
+    R(c, C.ol, x - 1, y, 4, 1);
+    R(c, C.b3, x, y, 2, 1);
+    P(c, C.b1, x + 1, y);
+    if (y % 2) { P(c, C.b2, x, y); P(c, C.b0, x + 1, y); }
+  }
+  R(c, C.ol, 5, 23, 7, 1);
+  const cx = Math.round(7 + bend * 3), cy = 10;
+  const fronds = [[-8, 2, 4], [-7, -3, 3], [-3, -6, 2], [3, -6, 2], [7, -3, 3], [8, 2, 4], [0, 3, 3]];
+  for (const [dx, dy, droop] of fronds) {             // daun palem, tebal di pangkal dan runcing di ujung
+    const n = Math.max(Math.abs(dx), Math.abs(dy)) + 3;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      const x = Math.round(cx + dx * t), y = Math.round(cy + dy * t + droop * t * t);
+      if (t < 0.7) P(c, C.g0, x, y + 2);
+      P(c, C.g1, x, y + 1);
+      P(c, C.g3, x, y);
+      if (t < 0.7) P(c, C.g2, x, y + 1);
+      P(c, t < 0.85 ? C.g4 : C.g3, x, y - 1);
+      if (i % 2 === 0 && t > 0.15 && t < 0.9) P(c, C.g0, x, y + 2 + (t < 0.5 ? 1 : 0));   // helai menjuntai
+    }
+  }
+  R(c, C.ol, cx - 1, cy, 3, 2); P(c, C.b3, cx, cy); P(c, C.b2, cx + 1, cy + 1); P(c, C.b4, cx - 1, cy);
+  return cv;
+}
+
+function makeHouse(style) {
+  const W = 64, H = 48, cv = mk(W, H), c = cv.getContext("2d");
+  const rf = style === "tin" ? [C.t0, C.t1, C.t2, C.t3, C.t4] : [C.r0, C.r1, C.r2, C.r3, C.r4];
+  for (let y = 0; y < 27; y++) {                      // atap trapesium
+    const x0 = y < 2 ? 14 : Math.max(2, Math.round(14 - y * 0.5));
+    const x1 = W - 1 - x0;
+    for (let x = x0; x <= x1; x++) {
+      let col;
+      if (style === "tin") {
+        col = x % 4 === 0 ? rf[3] : x % 4 === 1 ? rf[2] : x % 4 === 3 ? rf[1] : rf[2];
+        if (y > 5 && y % 9 === 0) col = rf[1];
+      } else {
+        const row = Math.floor(y / 4), seam = (x + (row % 2) * 4) % 8 === 0;
+        col = seam ? rf[1] : (row % 2 ? rf[2] : rf[3]);
+        if (y % 4 === 3) col = rf[1];
+        if (y % 4 === 0 && !seam) col = rf[4];
+      }
+      if (y < 3) col = rf[4];
+      if (x === x0 || x === x1 || y === 0) col = C.ol;
+      P(c, col, x, y);
+    }
+  }
+  R(c, C.ol, 2, 26, 60, 1);
+  R(c, rf[0], 3, 25, 58, 1);                          // bayangan ujung atap
+  R(c, "#2a1f3a", 6, 27, 52, 2);
+  for (let y = 27; y < 46; y++) for (let x = 6; x < 58; x++) {   // dinding papan
+    let col = (x - 6) % 5 === 0 ? C.wl0 : (y % 7 === 0 ? C.wl1 : C.wl2);
+    if ((x - 6) % 5 === 1) col = C.wl3;
+    if (y < 31) col = (x - 6) % 5 === 0 ? C.wl0 : C.wl1;                 // bagian di bawah atap lebih gelap
+    if (x === 6 || x === 57) col = C.ol;
+    P(c, col, x, y);
+  }
+  const win = (x0) => {
+    R(c, C.ol, x0, 31, 12, 11); R(c, C.b3, x0 + 1, 32, 10, 9);
+    R(c, C.w3, x0 + 2, 33, 8, 7); R(c, C.w4, x0 + 2, 33, 3, 3); P(c, C.w5, x0 + 3, 34);
+    R(c, C.b3, x0 + 5, 33, 1, 7); R(c, C.b3, x0 + 2, 36, 8, 1);
+    R(c, C.r2, x0 + 6, 33, 4, 3);                    // tirai
+    R(c, C.b2, x0, 42, 12, 2); R(c, C.ol, x0 - 1, 44, 14, 1);
+  };
+  win(13); win(39);
+  R(c, C.ol, 26, 31, 12, 15); R(c, C.b2, 27, 32, 10, 14); R(c, C.b3, 28, 33, 3, 12); R(c, C.b1, 32, 33, 4, 12);   // pintu
+  R(c, C.b4, 28, 33, 1, 12); R(c, C.b1, 31, 33, 1, 12);
+  R(c, C.ol, 27, 31, 10, 1); P(c, C.d5, 35, 39); P(c, C.d3, 35, 40);
+  R(c, C.gy1, 4, 45, 56, 3); R(c, C.gy2, 4, 45, 56, 1);                 // pondasi dan tangga
+  for (let x = 6; x < 58; x += 6) R(c, C.gy1, x, 46, 1, 2);
+  R(c, C.ol, 4, 47, 56, 1);
+  R(c, C.gy3, 25, 45, 14, 3); R(c, C.gy2, 25, 47, 14, 1); R(c, C.ol, 25, 47, 14, 1);
+  return cv;
+}
+
+// ---------------------------------------------------------------- karakter 16 x 24, 4 arah, 3 frame
+const c16 = (s) => { const l = (16 - s.length) >> 1; return ".".repeat(l) + s + ".".repeat(16 - s.length - l); };
+const HEAD = {
+  down: ["oooooooo", "ohhhhhhhho", "ohhhHHhhhhho", "ohhHHhhhhhho", "ohhhhhhhhhho", "ohhhhhhhhhho",
+         "ohhsssssshho", "ossessssesso", "ossessssesso", "ossssSSsssso", "osssssssso", "oooooooo"].map(c16),
+  up:   ["oooooooo", "ohhhhhhhho", "ohhhHHhhhhho", "ohhHHhhhhhho", "ohhhhhhhhhho", "ohhhhhhhhhho",
+         "ohhhhhhhhhho", "ohhhhhhhhhho", "ohhhhhhhhhho", "ohhhhhhhhhho", "ohhhhhhhho", "oooooooo"].map(c16),
+  left: ["oooooooo", "ohhhhhhhho", "ohhhHHhhhhho", "ohhHHhhhhhho", "ohhhhhhhhhho", "osshhhhhhhho",
+         "osssshhhhhho", "osesshhhhhho", "osesshhhhhho", "osssshhhhhho", "osssshhhho", "oooooooo"].map(c16),
+};
+const TORSO = {
+  down: ["otttttttto", "oLLtttttttto", "otTttttttTto", "otTttttttTto", "osTttttttTso", "oppppppppo"].map(c16),
+  left: ["otttttto", "oLLtttto", "otTtttto", "otTtttto", "osTtttto", "oppppppo"].map(c16),
+};
+TORSO.up = TORSO.down.map((r, i) => (i === 4 ? c16("otTttttttTto") : r));
+
+function composeChar(o, dir, frame) {
+  const cv = mk(16, 24), c = cv.getContext("2d");
+  const pal = { o: o.ol || "#241a2e", h: o.hair[0], H: o.hair[1], s: o.skin[0], S: o.skin[1], e: "#2a1d2e",
+                t: o.top[0], T: o.top[1], L: o.top[2], p: o.pants[0], P: o.pants[1], b: o.shoe[0], B: o.shoe[1],
+                a: o.accent || "#f0d8c0", k: "#2a2a3a" };
+  const bob = frame ? 1 : 0;                          // badan naik 1 piksel saat melangkah
+  const put = (rows, y0) => rows.forEach((row, j) => [...row].forEach((ch, x) => {
+    if (ch !== ".") P(c, pal[ch], x, y0 + j - bob);
+  }));
+  const side = dir === "left";
+  put(HEAD[dir], 1);
+  put(o.dress ? TORSO[dir].map((r, i) => (i === 5 ? r.replace(/p/g, "t") : r)) : TORSO[dir], 13);
+  const leg = (x0, lift, dark) => {                   // kaki: celana, sepatu, garis luar
+    const top = 19 - bob, n = 3 - lift;
+    R(c, pal.o, x0 - 1, top, 5, n + 2);
+    R(c, dark ? pal.P : pal.p, x0, top, 3, n);
+    if (!dark) R(c, pal.P, x0 + 2, top, 1, n);
+    R(c, pal.b, x0, top + n, 3, 1); P(c, pal.B, x0, top + n);
+  };
+  if (o.dress) {
+    R(c, pal.o, 3, 19 - bob, 10, 1); R(c, pal.t, 4, 19 - bob, 8, 1);
+    R(c, pal.o, 2, 20 - bob, 12, 2); R(c, pal.t, 3, 20 - bob, 10, 1); R(c, pal.T, 3, 21 - bob, 10, 1);
+    P(c, pal.L, 4, 20 - bob); P(c, pal.L, 5, 20 - bob);
+    const foot = (x0, lift) => { R(c, pal.s, x0 + 1, 22 - lift - bob, 2, 1); R(c, pal.b, x0, 23 - lift - bob, 3, 1); };
+    if (side) foot(6, frame === 1 ? 1 : 0);
+    else { foot(4, frame === 2 ? 1 : 0); foot(9, frame === 1 ? 1 : 0); }
+  } else if (side) {
+    const f = frame === 0 ? 0 : (frame === 1 ? -2 : 2);
+    leg(6 - f, frame === 1 ? 1 : 0, true);            // kaki belakang
+    leg(6 + f, frame === 2 ? 1 : 0, false);
+  } else {
+    leg(4, frame === 2 ? 1 : 0, false);
+    leg(9, frame === 1 ? 1 : 0, false);
+  }
+  for (const [x, y, ch] of (o.patch && o.patch[dir]) || []) P(c, pal[ch] || ch, x, y - bob);
+  return cv;
+}
+const flip = (cv) => { const o = mk(16, 24), c = o.getContext("2d"); c.translate(16, 0); c.scale(-1, 1); c.drawImage(cv, 0, 0); return o; };
+function makeChar(o) {
+  const out = { down: [], up: [], left: [], right: [] };
+  for (const dir of ["down", "up", "left"]) for (let f = 0; f < 3; f++) out[dir].push(composeChar(o, dir, f));
+  out.right = out.left.map(flip);
+  return out;
+}
+
+const headset = {
+  down: [[1, 6, "k"], [2, 6, "k"], [1, 7, "k"], [1, 8, "k"], [1, 9, "k"], [2, 9, "k"], [2, 7, "a"], [2, 8, "a"],
+         [13, 6, "k"], [14, 6, "k"], [14, 7, "k"], [14, 8, "k"], [14, 9, "k"], [13, 9, "k"], [13, 7, "a"], [13, 8, "a"],
+         [3, 2, "k"], [12, 2, "k"], [4, 1, "k"], [11, 1, "k"], [5, 1, "k"], [10, 1, "k"]],
+  left: [[6, 6, "k"], [7, 6, "k"], [8, 6, "k"], [6, 7, "k"], [7, 7, "a"], [8, 7, "k"], [6, 8, "k"], [7, 8, "a"],
+         [8, 8, "k"], [6, 9, "k"], [7, 9, "k"], [8, 9, "k"], [5, 1, "k"], [6, 1, "k"], [7, 1, "k"], [8, 1, "k"]],
+};
+headset.up = headset.down;
+const bun = (d, l) => [[6, 0, "o"], [7, 0, d], [8, 0, l], [9, 0, "o"]];
+const glasses = [[4, 6, "k"], [5, 6, "k"], [6, 6, "k"], [4, 9, "k"], [5, 9, "k"], [6, 9, "k"], [4, 7, "k"], [4, 8, "k"],
+                 [6, 7, "k"], [6, 8, "k"], [9, 6, "k"], [10, 6, "k"], [11, 6, "k"], [9, 9, "k"], [10, 9, "k"], [11, 9, "k"],
+                 [9, 7, "k"], [9, 8, "k"], [11, 7, "k"], [11, 8, "k"], [7, 7, "k"], [8, 7, "k"]];
+
+const CHARS = {
+  nino: { hair: ["#2a2230", "#524761"], skin: ["#c98d63", "#a36a4a"], top: ["#e0702c", "#b24a22", "#f4a24a"],
+          pants: ["#2f3d6e", "#1f2a4d"], shoe: ["#eeeef4", "#ffffff"], patch: { down: [[13, 8, "a"]], up: [[13, 8, "a"]] } },
+  kael: { hair: ["#6a4630", "#8c6444"], skin: ["#dcaa80", "#b4825e"], top: ["#7a8498", "#586075", "#a2abbd"],
+          pants: ["#3c3c4a", "#2a2a36"], shoe: ["#4c4c5e", "#6a6a80"], patch: headset, accent: "#35d0c0" },
+  ibu:  { hair: ["#2b2326", "#4a3b40"], skin: ["#c58a5e", "#9f6a46"], top: ["#c2415d", "#8f2c47", "#e46a82"], dress: true,
+          pants: ["#c2415d", "#8f2c47"], shoe: ["#5a3a30", "#7a5646"],
+          patch: { down: bun("#2b2326", "#4a3b40"), up: bun("#2b2326", "#4a3b40"), left: bun("#2b2326", "#4a3b40") } },
+  nenek: { hair: ["#a6a6bd", "#e2e2ee"], skin: ["#cf9c72", "#a97a54"], top: ["#6c9380", "#4b705e", "#8cb59f"], dress: true,
+           pants: ["#6c9380", "#4b705e"], shoe: ["#6a4a3a", "#86644e"],
+           patch: { down: bun("#a6a6bd", "#e2e2ee").concat(glasses), up: bun("#a6a6bd", "#e2e2ee"), left: bun("#a6a6bd", "#e2e2ee") } },
+};
+const SPR = {};
+for (const k of Object.keys(CHARS)) SPR[k] = makeChar(CHARS[k]);
+
+// ---------------------------------------------------------------- keadaan permainan
 const NPCS = [
-  { name: "Ibu Nino", tx: 6, ty: 8, sprite: makeSprite(SPRITE, { ...PAL, h: "#2b2b2b", b: "#c2415d" }),
+  { name: "Ibu Nino", tx: 6, ty: 8, spr: SPR.ibu, dir: "down",
     lines: [
       "Nino, so malam baru pulang. Torang so masak ikan cakalang, makan dulu.",
       "Ibu dengar gempa makin sering. HP-mu juga sering error to?",
       "Kalau bajumu so kotor, bawa ke Ibu. Ibu cuci, gratis.",
     ] },
-  { name: "Nenek Kael", tx: 12, ty: 8, sprite: makeSprite(SPRITE, { ...PAL, h: "#cfcfcf", b: "#5a7d9a" }),
+  { name: "Nenek Kael", tx: 12, ty: 8, spr: SPR.nenek, dir: "down",
     lines: [
       "Oh, Nino. Kael ada di dalam, main game terus dari tadi.",
       "Anak itu kelihatan malas, tapi Nenek tahu dia sedang berjuang.",
       "Kalau ada yang rusak, bawa ke Nenek. Nenek perbaiki.",
     ] },
 ];
+const npcAt = (x, y) => NPCS.find((n) => n.tx === x && n.ty === y);
+const walkable = (x, y) => baseWalkable(x, y) && !npcAt(x, y);
 
-// Atlas tile, digambar sekali
-const atlas = document.createElement("canvas");
-atlas.width = TS * 5; atlas.height = TS;
-const ac = atlas.getContext("2d");
-const px = (c, x, y, w, h) => { ac.fillStyle = c; ac.fillRect(x, y, w, h); };
-function drawTile(t) {
-  const ox = t * TS;
-  if (t === GRASS || t === TREE) {
-    px("#4f8a3c", ox, 0, TS, TS);
-    for (let k = 0; k < 6; k++) {
-      px(k % 2 ? "#62a04a" : "#3f7330", ox + (k * 5 + 3) % 14 + 1, (k * 7 + 2) % 14 + 1, 1, 1);
-    }
-  }
-  if (t === ROAD) {
-    px("#b39a6b", ox, 0, TS, TS);
-    for (let k = 0; k < 6; k++) {
-      px(k % 2 ? "#c7b07f" : "#9c8556", ox + (k * 5 + 3) % 14 + 1, (k * 7 + 2) % 14 + 1, 1, 1);
-    }
-  }
-  if (t === WALL) {
-    px("#6e5a4c", ox, 0, TS, TS);
-    px("#8a7464", ox, 0, TS, 1);
-    px("#4b3b31", ox, 5, TS, 1); px("#4b3b31", ox, 11, TS, 1);
-    px("#4b3b31", ox + 8, 0, 1, 5); px("#4b3b31", ox + 4, 6, 1, 5);
-    px("#4b3b31", ox + 12, 6, 1, 5); px("#4b3b31", ox + 8, 12, 1, 4);
-  }
-  if (t === TREE) {
-    px("#5b3a22", ox + 7, 10, 2, 6);
-    px("#2f6b2f", ox + 3, 2, 10, 8);
-    px("#3f8a3f", ox + 4, 3, 8, 5);
-    px("#245524", ox + 4, 9, 8, 1);
-  }
-  if (t === WATER) {
-    px("#3a6ea5", ox, 0, TS, TS);
-    px("#5b92c7", ox + 3, 4, 4, 1); px("#5b92c7", ox + 9, 10, 4, 1);
-    px("#2d5a8a", ox + 1, 13, 4, 1);
-  }
-}
-for (let t = 0; t < 5; t++) drawTile(t);
-
-// Keadaan permainan
-const player = { tx: 9, ty: 3, x: 9 * TS, y: 3 * TS, path: [] };
+const player = { tx: 9, ty: 3, x: 9 * TS, y: 3 * TS, path: [], dir: "down", walk: 0 };
 const target = { x: -1, y: -1 };
 const cam = { x: 0, y: 0 };
 const dlg = { npc: null, line: 0, shown: 0 };   // npc null berarti dialog tertutup
@@ -139,14 +453,17 @@ const CPS = 40;                                  // karakter per detik
 
 const adjacent = (n) => Math.abs(n.tx - player.tx) + Math.abs(n.ty - player.ty) === 1;
 const atRest = () => player.x === player.tx * TS && player.y === player.ty * TS && player.path.length === 0;
+const dirTo = (dx, dy) => (Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down"));
 function openDialog(n) {
   dlg.npc = n; dlg.line = 0; dlg.shown = 0;
+  n.dir = dirTo(player.tx - n.tx, player.ty - n.ty);
+  player.dir = dirTo(n.tx - player.tx, n.ty - player.ty);
   pending = null; target.x = -1;
 }
 function advanceDialog() {
   const text = dlg.npc.lines[dlg.line];
   if (dlg.shown < text.length) { dlg.shown = text.length; return; }
-  if (++dlg.line >= dlg.npc.lines.length) { dlg.npc = null; return; }
+  if (++dlg.line >= dlg.npc.lines.length) { dlg.npc.dir = "down"; dlg.npc = null; return; }
   dlg.shown = 0;
 }
 
@@ -175,25 +492,30 @@ function findPath(sx, sy, ex, ey) {
 function update(dt) {
   if (dlg.npc) {
     dlg.shown = Math.min(dlg.npc.lines[dlg.line].length, dlg.shown + CPS * dt);
+    player.walk = 0;
     return;
   }
   let move = SPEED * dt;
+  let moved = false;
   while (move > 0) {
     const gx = player.tx * TS, gy = player.ty * TS;
     if (player.x === gx && player.y === gy) {
       const next = player.path.shift();
       if (!next) { target.x = -1; break; }
+      player.dir = dirTo(next[0] - player.tx, next[1] - player.ty);
       player.tx = next[0]; player.ty = next[1];
       continue;
     }
     const dx = gx - player.x, dy = gy - player.y;
     const dist = Math.abs(dx) + Math.abs(dy);
+    moved = true;
     if (move >= dist) {
       player.x = gx; player.y = gy; move -= dist;
     } else {
       player.x += Math.sign(dx) * move; player.y += Math.sign(dy) * move; move = 0;
     }
   }
+  player.walk = moved ? player.walk + dt : 0;
   if (pending && atRest()) { if (adjacent(pending)) openDialog(pending); else pending = null; }
 }
 
@@ -203,28 +525,77 @@ function updateCamera() {
   cam.y = Math.round(clamp(player.y + TS / 2 - VH / 2, 0, MH * TS - VH));
 }
 
+// ---------------------------------------------------------------- gambar
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d", { alpha: false });
 ctx.imageSmoothingEnabled = false;
 
-function render(now) {
-  ctx.fillStyle = "#0b0b14";
-  ctx.fillRect(0, 0, VW, VH);
-  const x0 = Math.floor(cam.x / TS), y0 = Math.floor(cam.y / TS);
-  for (let j = y0; j <= y0 + Math.ceil(VH / TS); j++) {
-    for (let i = x0; i <= x0 + Math.ceil(VW / TS); i++) {
-      if (i < 0 || j < 0 || i >= MW || j >= MH) continue;
-      ctx.drawImage(atlas, map[j][i] * TS, 0, TS, TS, i * TS - cam.x, j * TS - cam.y, TS, TS);
+const ground = buildGround();
+const treeSpr = [makeTree(1), makeTree(2), makeTree(3)];
+const palmSpr = [makePalm(1), makePalm(2)];
+const houseSpr = { clay: makeHouse("clay"), tin: makeHouse("tin") };
+const HOUSES = [{ x: 3, y: 4, spr: houseSpr.clay }, { x: 13, y: 4, spr: houseSpr.tin }];
+
+const vignette = (() => {
+  const cv = mk(VW, VH), c = cv.getContext("2d");
+  const g = c.createRadialGradient(VW / 2, VH / 2, VH * 0.28, VW / 2, VH / 2, VH * 0.68);
+  g.addColorStop(0, "rgba(20,10,50,0)"); g.addColorStop(1, "rgba(20,10,50,0.34)");
+  c.fillStyle = g; c.fillRect(0, 0, VW, VH);
+  return cv;
+})();
+
+function shadow(x, y, w) {                         // bayangan tiga baris di bawah objek
+  ctx.fillStyle = "rgba(20,10,40,0.28)";
+  ctx.fillRect(x - (w >> 1) + 2, y - 1, w - 4, 1);
+  ctx.fillRect(x - (w >> 1), y, w, 1);
+  ctx.fillRect(x - (w >> 1) + 2, y + 1, w - 4, 1);
+}
+
+const objects = [];
+for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+  const t = map[y][x];
+  if (t === TREE) objects.push({ base: y * TS + TS, draw: () => {
+    shadow(x * TS + 8 - cam.x, y * TS + 14 - cam.y, 14);
+    ctx.drawImage(treeSpr[hash(x, y, 60) % 3], x * TS - cam.x, y * TS - 8 - cam.y);
+  } });
+  if (t === PALM) objects.push({ base: y * TS + TS, draw: () => {
+    shadow(x * TS + 9 - cam.x, y * TS + 15 - cam.y, 12);
+    ctx.drawImage(palmSpr[hash(x, y, 61) % 2], x * TS - cam.x, y * TS - 8 - cam.y);
+  } });
+}
+for (const h of HOUSES) objects.push({ base: (h.y + 3) * TS, draw: () => ctx.drawImage(h.spr, h.x * TS - cam.x, h.y * TS - cam.y) });
+
+function drawChar(spr, dir, x, y, walk) {
+  const f = walk > 0 ? [0, 1, 0, 2][Math.floor(walk * 8) % 4] : 0;
+  shadow(x + 8 - cam.x, y + 14 - cam.y, 10);
+  ctx.drawImage(spr[dir][f], Math.round(x - cam.x), Math.round(y - 8 - cam.y));
+}
+
+function sparkle(now) {                            // kilau air
+  const k = Math.floor(now / 450) % 3;
+  for (let ty = 0; ty < MH; ty++) for (let tx = 0; tx < MW; tx++) {
+    if (map[ty][tx] !== WATER) continue;
+    for (let i = 0; i < 2; i++) {
+      const h = hash(tx, ty, 70 + i + k * 5);
+      const x = tx * TS + 3 + (h % 9), y = ty * TS + 4 + ((h >> 5) % 8);
+      if (map[(y / TS) | 0][(x / TS) | 0] === WATER) { ctx.fillStyle = C.w5; ctx.fillRect(x - cam.x, y - cam.y, 3, 1); }
     }
   }
+}
+
+function render(now) {
+  ctx.drawImage(ground, cam.x, cam.y, VW, VH, 0, 0, VW, VH);
+  sparkle(now);
   if (target.x >= 0 && Math.floor(now / 250) % 2 === 0) {
-    ctx.strokeStyle = "#ffe066";
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = "#ffe066"; ctx.lineWidth = 1;
     ctx.strokeRect(target.x * TS - cam.x + 1.5, target.y * TS - cam.y + 1.5, TS - 3, TS - 3);
   }
-  for (const n of NPCS) ctx.drawImage(n.sprite, n.tx * TS - cam.x, n.ty * TS - cam.y);
-  ctx.drawImage(sprite, Math.round(player.x - cam.x), Math.round(player.y - cam.y));
-  if (dlg.npc) drawDialog();
+  const list = objects.concat(
+    NPCS.map((n) => ({ base: n.ty * TS + TS, draw: () => drawChar(n.spr, n.dir, n.tx * TS, n.ty * TS, 0) })),
+    [{ base: player.y + TS, draw: () => drawChar(SPR.nino, player.dir, player.x, player.y, player.walk) }]);
+  list.sort((a, b) => a.base - b.base).forEach((o) => o.draw());
+  ctx.drawImage(vignette, 0, 0);
+  if (dlg.npc) drawDialog(now);
 }
 
 function wrap(text, maxW) {
@@ -232,31 +603,39 @@ function wrap(text, maxW) {
   let line = "";
   for (const w of text.split(" ")) {
     const t = line ? line + " " + w : w;
-    if (line && ctx.measureText(t).width > maxW) { out.push(line); line = w; } else line = t;
+    if (line && textW(t) > maxW) { out.push(line); line = w; } else line = t;
   }
   if (line) out.push(line);
   return out;
 }
 
-function drawDialog() {
-  const x = 4, y = 236, w = VW - 8, h = 80;
-  ctx.font = "8px monospace"; ctx.textBaseline = "top";
-  ctx.fillStyle = "#14142a"; ctx.fillRect(x, y, w, h);
-  ctx.strokeStyle = "#e8e8f0"; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-  ctx.fillStyle = "#ffe066"; ctx.fillRect(x + 6, y - 7, Math.ceil(ctx.measureText(dlg.npc.name).width) + 8, 12);
-  ctx.fillStyle = "#14142a"; ctx.fillText(dlg.npc.name, x + 10, y - 5);
+function drawDialog(now) {
+  const x = 4, y = 234, w = VW - 8, h = 82;
+  R(ctx, "#0b0d24", x, y + 1, w, h - 2); R(ctx, "#0b0d24", x + 1, y, w - 2, h);   // panel biru gradasi, bingkai bertingkat
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, "#2d3a82"); g.addColorStop(1, "#171c52");
+  ctx.fillStyle = g; ctx.fillRect(x + 2, y + 2, w - 4, h - 4);
+  R(ctx, "#b8c2ff", x + 2, y + 2, w - 4, 1); R(ctx, "#b8c2ff", x + 2, y + 2, 1, h - 4);
+  R(ctx, "#6c78d4", x + 3, y + h - 3, w - 5, 1); R(ctx, "#6c78d4", x + w - 3, y + 3, 1, h - 5);
+  const nw = textW(dlg.npc.name) + 10;                                            // kartu nama
+  R(ctx, "#0b0d24", x + 6, y - 8, nw, 12);
+  R(ctx, "#f4cf5a", x + 7, y - 7, nw - 2, 10); R(ctx, "#fff1b0", x + 7, y - 7, nw - 2, 1);
+  drawText(ctx, dlg.npc.name, x + 12, y - 5, "#3a2a14");
   const text = dlg.npc.lines[dlg.line];
-  ctx.fillStyle = "#f2f2f8";
   let start = 0;
-  wrap(text, w - 16).forEach((ln, i) => {
-    ctx.fillText(ln.slice(0, Math.max(0, Math.floor(dlg.shown) - start)), x + 8, y + 10 + i * 11);
+  wrap(text, w - 18).forEach((ln, i) => {
+    const part = ln.slice(0, Math.max(0, Math.floor(dlg.shown) - start));
+    drawText(ctx, part, x + 9, y + 10 + i * 10, "#f4f4ff", "#0b0d24");
     start += ln.length + 1;
   });
-  if (dlg.shown >= text.length && Math.floor(performance.now() / 400) % 2 === 0) {
-    ctx.fillStyle = "#ffe066"; ctx.fillRect(x + w - 12, y + h - 10, 5, 3);
+  if (dlg.shown >= text.length && Math.floor(now / 400) % 2 === 0) {
+    const ax = x + w - 14, ay = y + h - 11;
+    R(ctx, "#f4cf5a", ax, ay, 7, 1); R(ctx, "#f4cf5a", ax + 1, ay + 1, 5, 1);
+    R(ctx, "#f4cf5a", ax + 2, ay + 2, 3, 1); R(ctx, "#f4cf5a", ax + 3, ay + 3, 1, 1);
   }
 }
 
+// ---------------------------------------------------------------- input
 // Tap layar menjadi tile tujuan
 canvas.addEventListener("pointerdown", (e) => {
   e.preventDefault();
@@ -306,7 +685,7 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 // Dipakai untuk uji otomatis
-window.__recursio = { VW, VH, TS, MW, MH, map, player, cam, target, dlg, NPCS };
+window.__recursio = { VW, VH, TS, MW, MH, map, player, cam, target, dlg, NPCS, SPR, treeSpr, palmSpr, houseSpr };
 </script>
 </body>
 </html>
