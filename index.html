@@ -6,10 +6,10 @@
 <title>Recursio</title>
 <link rel="icon" href="data:,">
 <style>
-  html, body { margin: 0; height: 100%; background: #1a1424; overflow: hidden; overscroll-behavior: none; }
+  html, body { margin: 0; height: 100%; background: #0b0b14; overflow: hidden; overscroll-behavior: none; }
   #wrap { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
-  #gl, #ui { position: absolute; left: 0; top: 0; display: block; touch-action: none; image-rendering: pixelated; }
-  #ui { pointer-events: none; }
+  #gl, #ui { position: absolute; left: 0; top: 0; display: block; touch-action: none; }
+  #ui { image-rendering: pixelated; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -21,16 +21,92 @@ import * as THREE from "./lib/three.module.min.js";
 // Logika memakai satuan piksel tile 16. Dunia 3D memakai 1 unit = 1 tile.
 const VW = 180, VH = 320, TS = 16, SPEED = 64;
 const GRASS = 0, ROAD = 1, HOUSE = 2, TREE = 3, WATER = 4, FOREST = 5, PALM = 6, LAMP = 7, FIELD = 8;   // tipe > 1 menghalangi jalan
+
 const hash = (x, y, s = 0) => {
   let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(s, 1274126177)) >>> 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
   return (h ^ (h >>> 16)) >>> 0;
 };
-const rnd = (x, y, s) => (hash(x, y, s) % 10000) / 10000;
 const mk = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; };
 const P = (c, col, x, y) => { c.fillStyle = col; c.fillRect(x, y, 1, 1); };
 const R = (c, col, x, y, w, h) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
-const C = { wood0: "#6e4228", wood1: "#93603a", wood2: "#b8814c" };   // warna kotak dialog
+
+// ================================================================ palet
+const C = {
+  ol: "#1c1630",
+  g0: "#1b4332", g1: "#2a6038", g2: "#3a7d44", g3: "#51a050", g4: "#7cc263", g5: "#b1de7c",
+  d0: "#4a3427", d1: "#6b4d38", d2: "#8c6a48", d3: "#a98558", d4: "#c4a36d", d5: "#dcc08a",
+  s2: "#d8c08a", s3: "#ecdcaa",
+  w0: "#1f3a6b", w1: "#2c5594", w2: "#3a74b8", w3: "#5c9bd6", w4: "#9ccbe8", w5: "#e4f4fa",
+  r0: "#5e2234", r1: "#8c3340", r2: "#b94a47", r3: "#d9694f", r4: "#ef9a68",
+  t0: "#3a424f", t1: "#58667a", t2: "#7b8ca3", t3: "#a6b6c9", t4: "#d3deea",
+  b0: "#3b2430", b1: "#5c3a38", b2: "#855436", b3: "#a8744a", b4: "#cf9a66",
+  wl0: "#a8884f", wl1: "#c8a661", wl2: "#e0c27c", wl3: "#f0dc9e",
+  gy1: "#6a6678", gy2: "#908ca0", gy3: "#b9b6c6",
+  glow0: "#ffb547", glow1: "#ffd88a", glow2: "#fff4cf",
+};
+
+// ================================================================ mesin sprite berbasis bentuk
+// Bentuk (elips, poligon, persegi bulat) digambar ke mask lalu diisi warna rata, jadi piksel tetap tajam.
+// Shading sabit: tepi kiri atas diberi warna terang, tepi kanan bawah warna gelap.
+// Outline selektif: piksel kosong di tepi diberi versi gelap dari warna tetangganya.
+const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const toHex = (r, g, b) => "#" + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("");
+const dark = (h, k = 0.5) => { const [r, g, b] = hex(h); return toHex(r * k + 18, g * k + 6, b * k + 34); };
+
+class Pix {
+  constructor(w, h) { this.w = w; this.h = h; this.col = new Array(w * h).fill(null); }
+  mask(fn) {
+    const cv = mk(this.w, this.h), c = cv.getContext("2d");
+    c.fillStyle = "#fff"; c.strokeStyle = "#fff";
+    fn(c);
+    const d = c.getImageData(0, 0, this.w, this.h).data, m = new Uint8Array(this.w * this.h);
+    for (let i = 0; i < m.length; i++) m[i] = d[i * 4 + 3] >= 128 ? 1 : 0;
+    return m;
+  }
+  shift(m, dx, dy) {
+    const o = new Uint8Array(m.length);
+    for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++) {
+      const sx = x - dx, sy = y - dy;
+      if (sx >= 0 && sy >= 0 && sx < this.w && sy < this.h) o[y * this.w + x] = m[sy * this.w + sx];
+    }
+    return o;
+  }
+  paint(color, m) { for (let i = 0; i < m.length; i++) if (m[i]) this.col[i] = color; }
+  // ramp: [dasar, terang, gelap]; k: tebal sabit
+  shape(ramp, fn, k = 1) {
+    const m = this.mask(fn);
+    this.paint(ramp[0], m);
+    if (ramp[1]) { const s = this.shift(m, k, k); this.paint(ramp[1], m.map((v, i) => v && !s[i])); }
+    if (ramp[2]) { const s = this.shift(m, -k, -k); this.paint(ramp[2], m.map((v, i) => v && !s[i])); }
+    return m;
+  }
+  dot(color, x, y) { if (x >= 0 && y >= 0 && x < this.w && y < this.h) this.col[y * this.w + x] = color; }
+  rect(color, x, y, w, h) { for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) this.dot(color, i, j); }
+  outline() {
+    const { w, h } = this, src = this.col.slice();
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (src[y * w + x]) continue;
+      for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const n = src[ny * w + nx];
+        if (n) { this.col[y * w + x] = dark(n, 0.38); break; }
+      }
+    }
+  }
+  canvas() {
+    const cv = mk(this.w, this.h), c = cv.getContext("2d");
+    this.col.forEach((v, i) => { if (v) P(c, v, i % this.w, (i / this.w) | 0); });
+    return cv;
+  }
+}
+// pembantu bentuk untuk fungsi mask
+const ell = (cx, cy, rx, ry, rot = 0) => (c) => { c.beginPath(); c.ellipse(cx, cy, rx, ry, rot, 0, Math.PI * 2); c.fill(); };
+const poly = (pts) => (c) => { c.beginPath(); pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.closePath(); c.fill(); };
+const rrect = (x, y, w, h, r) => (c) => { c.beginPath(); c.roundRect(x, y, w, h, r); c.fill(); };
+const all = (...fns) => (c) => fns.forEach((f) => f(c));
+const clip = (x, y, w, h, fn) => (c) => { c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip(); fn(c); c.restore(); };
 
 // ================================================================ font bitmap 5x7
 // Tiap karakter 7 baris (9 untuk huruf berekor g j p q y), 5 bit per baris.
@@ -85,7 +161,7 @@ function drawText(c, s, x, y, col, shadow) {
 }
 
 // ================================================================ peta
-const MW = 20, MH = 32;
+const MW = 20, MH = 32, M = 8;   // M: lebar hutan di luar peta, hanya untuk pemandangan
 const map = Array.from({ length: MH }, () => new Array(MW).fill(GRASS));
 const fill = (x, y, w, h, t) => { for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) map[j][i] = t; };
 fill(0, 0, MW, 1, FOREST); fill(0, MH - 1, MW, 1, FOREST);   // pepohonan di pinggir peta
@@ -104,6 +180,433 @@ const tileAt = (x, y) => (x >= 0 && y >= 0 && x < MW && y < MH ? map[y][x] : FOR
 
 const baseWalkable = (x, y) =>
   x >= 0 && y >= 0 && x < MW && y < MH && (map[y][x] === GRASS || map[y][x] === ROAD);
+
+// ================================================================ tekstur tanah (digambar sekali)
+const isRoadLike = (x, y) => { const t = tileAt(x, y); return t === ROAD || t === HOUSE; };
+const isWater = (x, y) => tileAt(x, y) === WATER;
+
+function drawGrass(c, ox, oy, tx, ty) {
+  R(c, C.g2, ox, oy, TS, TS);
+  for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) {
+    const h = hash(tx * TS + x, ty * TS + y, 1) % 100;
+    if (h < 6) P(c, C.g3, ox + x, oy + y); else if (h < 11) P(c, C.g1, ox + x, oy + y);
+  }
+  for (let k = 0; k < 2; k++) {                       // rumpun rumput kecil
+    const h = hash(tx, ty, 10 + k);
+    if (h % 3 === 0) continue;
+    const x = 2 + (h >>> 4) % 12, y = 3 + (h >>> 9) % 11;
+    P(c, C.g4, ox + x, oy + y - 1); P(c, C.g3, ox + x - 1, oy + y); P(c, C.g4, ox + x + 1, oy + y);
+    P(c, C.g1, ox + x, oy + y);
+  }
+  const f = hash(tx, ty, 20) % 11;                    // bunga
+  if (f < 2) {
+    const cols = [["#f4f0e6", "#f2c94c"], ["#f08aa8", "#f2c94c"], ["#f2c94c", "#e07a2c"]][hash(tx, ty, 21) % 3];
+    for (let k = 0; k < 2; k++) {
+      const x = 3 + (hash(tx, ty, 22 + k) % 10), y = 4 + (hash(tx, ty, 24 + k) % 9);
+      P(c, C.g1, ox + x, oy + y + 1);
+      P(c, cols[0], ox + x - 1, oy + y); P(c, cols[0], ox + x + 1, oy + y);
+      P(c, cols[0], ox + x, oy + y - 1); P(c, cols[1], ox + x, oy + y);
+    }
+  }
+}
+
+function drawRoad(c, ox, oy, tx, ty) {
+  const open = [!isRoadLike(tx, ty - 1), !isRoadLike(tx, ty + 1),
+                !isRoadLike(tx - 1, ty), !isRoadLike(tx + 1, ty)];            // atas, bawah, kiri, kanan
+  for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) {
+    const wx = tx * TS + x, wy = ty * TS + y;
+    const h = hash(wx, wy, 3) % 100;
+    let col = h < 14 ? C.d4 : h < 24 ? C.d2 : C.d3;
+    if (h > 96) col = C.d1;
+    let d = 99, ew = 0;                               // jarak ke sisi yang berbatasan dengan rumput
+    if (open[0] && y < d) { d = y; ew = wx; }
+    if (open[1] && 15 - y < d) { d = 15 - y; ew = wx; }
+    if (open[2] && x < d) { d = x; ew = wy; }
+    if (open[3] && 15 - x < d) { d = 15 - x; ew = wy; }
+    if (d < 99) {
+      const wv = 2 + (hash(ew, 7, 5) % 3 === 0 ? 1 : 0);
+      if (d < wv - 1) col = hash(wx, wy, 6) % 3 ? C.g2 : C.g1;
+      else if (d === wv - 1) col = C.d1;
+      else if (d === wv) col = C.d2;
+    }
+    P(c, col, ox + x, oy + y);
+  }
+  for (let k = 0; k < 2; k++) {                       // kerikil
+    const h = hash(tx, ty, 30 + k);
+    if (h % 4) continue;
+    const x = 4 + (h >>> 4) % 7, y = 4 + (h >>> 9) % 7;
+    P(c, C.d1, ox + x, oy + y + 1); P(c, C.d1, ox + x + 1, oy + y + 1); P(c, C.d5, ox + x, oy + y);
+  }
+}
+
+function drawWater(c, ox, oy, tx, ty) {
+  R(c, C.w1, ox, oy, TS, TS);
+  for (let y = 0; y < TS; y++) if ((ty * TS + y) % 5 === 0) R(c, C.w0, ox, oy + y, TS, 1);
+  const open = [!isWater(tx, ty - 1), !isWater(tx, ty + 1), !isWater(tx - 1, ty), !isWater(tx + 1, ty)];
+  for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) {
+    let d = 99;
+    if (open[0]) d = Math.min(d, y);
+    if (open[1]) d = Math.min(d, 15 - y);
+    if (open[2]) d = Math.min(d, x);
+    if (open[3]) d = Math.min(d, 15 - x);
+    if (d === 0) P(c, C.d1, ox + x, oy + y);
+    else if (d === 1) P(c, C.s2, ox + x, oy + y);
+    else if (d === 2) P(c, C.s3, ox + x, oy + y);
+    else if (d === 3 && hash(tx * TS + x, ty * TS + y, 8) % 3) P(c, C.w3, ox + x, oy + y);
+  }
+}
+
+function drawForest(c, ox, oy, tx, ty) {
+  R(c, C.g0, ox, oy, TS, TS);
+  for (let k = 0; k < 4; k++) {
+    const h = hash(tx, ty, 40 + k);
+    const bx = (h % 14) + 1, by = ((h >>> 5) % 12) + 2, br = 3 + ((h >>> 10) % 3);
+    for (let y = -br; y <= br; y++) for (let x = -br; x <= br; x++) {
+      if (x * x + y * y > br * br) continue;
+      const px = bx + x, py = by + y;
+      if (px < 0 || py < 0 || px >= TS || py >= TS) continue;
+      const v = (-x * 0.6 - y * 0.9) / br + (hash(tx * TS + px, ty * TS + py, 9) % 5) * 0.1;
+      P(c, v > 0.6 ? C.g2 : v > -0.2 ? C.g1 : C.g0, ox + px, oy + py);
+    }
+  }
+}
+
+function drawField(c, ox, oy, tx, ty) {
+  R(c, "#8a5a36", ox, oy, TS, TS);
+  for (let y = 0; y < TS; y += 4) { R(c, "#6a4228", ox, oy + y + 3, TS, 1); R(c, "#a8744a", ox, oy + y, TS, 1); }   // alur bajak
+}
+
+function buildGround() {
+  const cv = mk((MW + 2 * M) * TS, (MH + 2 * M) * TS), c = cv.getContext("2d");
+  for (let ty = -M; ty < MH + M; ty++) for (let tx = -M; tx < MW + M; tx++) {
+    const t = tileAt(tx, ty), ox = (tx + M) * TS, oy = (ty + M) * TS;
+    if (t === ROAD) drawRoad(c, ox, oy, tx, ty);
+    else if (t === WATER) drawWater(c, ox, oy, tx, ty);
+    else if (t === FOREST) drawForest(c, ox, oy, tx, ty);
+    else if (t === FIELD) drawField(c, ox, oy, tx, ty);
+    else drawGrass(c, ox, oy, tx, ty);
+  }
+  return cv;
+}
+
+// ================================================================ sprite pohon, palem, lampu (32 x 48)
+function makeTree(seed) {
+  const w = 32, h = 48, cv = mk(w, h), c = cv.getContext("2d");
+  R(c, C.ol, 13, 30, 6, 17); R(c, C.b3, 14, 30, 1, 16); R(c, C.b2, 15, 30, 2, 16); R(c, C.b1, 17, 30, 1, 16);   // batang
+  R(c, C.ol, 10, 44, 12, 3); R(c, C.b2, 11, 44, 10, 2); R(c, C.b1, 17, 44, 4, 2); P(c, C.b4, 14, 33); P(c, C.b4, 14, 38);
+  const circles = [[16, 14, 11], [8, 21, 7], [24, 21, 7], [16, 25, 8], [10, 11, 7], [22, 11, 7]];
+  const mask = (x, y) => circles.some(([cx, cy, r]) => (x - cx) ** 2 + (y - cy) ** 2 <= r * r);
+  for (let y = 0; y < 36; y++) for (let x = 0; x < w; x++) {
+    if (!mask(x, y)) continue;
+    if (!mask(x, y - 1) || !mask(x, y + 1) || !mask(x - 1, y) || !mask(x + 1, y)) { P(c, "#132a1d", x, y); continue; }
+    // gumpalan daun: tiap gumpal punya terang sendiri, ditambah arah cahaya kiri atas
+    const cl = Math.floor(x / 5) + Math.floor((y + (Math.floor(x / 5) % 2) * 2) / 5) * 7;
+    const inner = ((x % 5) + (y % 5)) / 8;
+    const v = 1 - Math.hypot(x - 10, y - 7) / 26 + (hash(cl, seed, 4) % 3) * 0.06 - inner * 0.18 + (hash(x, y, seed) % 3) * 0.03;
+    const ramp = [C.g0, C.g1, C.g2, C.g3, C.g4, C.g5];
+    P(c, ramp[Math.max(0, Math.min(5, Math.floor(v * 6.2)))], x, y);
+  }
+  return cv;
+}
+
+function makePalm(seed) {
+  const w = 32, h = 48, cv = mk(w, h), c = cv.getContext("2d");
+  const bend = seed % 2 ? 1 : -1;
+  let cx = 16, cy = 16;
+  for (let y = 47; y >= 16; y--) {                    // batang melengkung bercincin
+    const t = (47 - y) / 31;
+    const x = Math.round(15 + bend * 5 * t * t);
+    R(c, C.ol, x - 1, y, 5, 1);
+    R(c, C.b3, x, y, 3, 1); P(c, C.b4, x, y); P(c, C.b1, x + 2, y);
+    if (y % 3 === 0) R(c, C.b1, x, y, 3, 1);
+    if (y === 16) { cx = x + 1; cy = y; }
+  }
+  R(c, C.ol, 11, 47, 11, 1);
+  const fronds = [[-15, 3, 7], [-13, -5, 5], [-6, -12, 3], [5, -12, 3], [13, -5, 5], [15, 3, 7], [-3, 6, 5], [4, 6, 5]];
+  for (const [dx, dy, droop] of fronds) {
+    const n = Math.max(Math.abs(dx), Math.abs(dy)) + 3;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      const x = Math.round(cx + dx * t), y = Math.round(cy + dy * t + droop * t * t);
+      const th = t < 0.35 ? 2 : t < 0.8 ? 1 : 0;
+      for (let k = -th; k <= th + 1; k++) P(c, k <= -th ? C.g4 : k > th ? C.g0 : (k < 0 ? C.g3 : C.g2), x, y + k);
+      if (i % 2 === 0 && t > 0.15 && t < 0.92) {     // helai menjuntai
+        P(c, C.g1, x, y + th + 2); P(c, C.g0, x, y + th + 3);
+      }
+    }
+  }
+  for (const [kx, ky] of [[-2, 1], [1, 1], [-1, 3]]) {   // kelapa
+    R(c, "#2a3a1c", cx + kx, cy + ky, 2, 2); P(c, "#6f8a3a", cx + kx, cy + ky);
+  }
+  return cv;
+}
+
+function makeLamp(glowOnly) {
+  const cv = mk(16, 40), c = cv.getContext("2d");
+  if (!glowOnly) {
+    R(c, C.ol, 6, 10, 4, 30); R(c, "#3c3448", 7, 10, 2, 29); P(c, "#6a6080", 7, 14); P(c, "#6a6080", 7, 22);
+    R(c, C.ol, 4, 36, 8, 4); R(c, "#3c3448", 5, 36, 6, 3);
+    R(c, C.ol, 3, 1, 10, 11); R(c, "#2a2433", 4, 0, 8, 2);
+  }
+  R(c, C.glow0, 4, 3, 8, 7); R(c, C.glow1, 5, 4, 6, 5); R(c, C.glow2, 6, 5, 4, 3);
+  if (!glowOnly) { R(c, C.ol, 7, 3, 2, 7); R(c, C.ol, 4, 6, 8, 1); }
+  return cv;
+}
+
+// ================================================================ tekstur rumah
+function wallCanvas(w, h, door, windows, glowOnly) {
+  const cv = mk(w, h), c = cv.getContext("2d");
+  if (glowOnly) R(c, "#000", 0, 0, w, h);
+  else for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let col = x % 5 === 0 ? C.wl0 : (y % 8 === 7 ? C.wl1 : C.wl2);
+    if (x % 5 === 1) col = C.wl3;
+    if (y < 3) col = x % 5 === 0 ? C.b2 : C.wl0;      // bayangan di bawah atap
+    if (y >= h - 3) col = y === h - 3 ? C.gy2 : C.gy1;   // pondasi
+    P(c, col, x, y);
+  }
+  for (const x0 of windows) {
+    if (!glowOnly) { R(c, C.ol, x0, 5, 12, 10); R(c, C.b3, x0 + 1, 6, 10, 8); }
+    R(c, C.glow0, x0 + 2, 7, 8, 6); R(c, C.glow1, x0 + 2, 7, 5, 4); R(c, C.glow2, x0 + 3, 8, 2, 2);
+    if (!glowOnly) {
+      R(c, C.b3, x0 + 5, 7, 1, 6); R(c, C.b3, x0 + 2, 10, 8, 1); R(c, C.r1, x0 + 7, 7, 3, 3);
+      R(c, C.b2, x0, 15, 12, 2); R(c, C.ol, x0, 17, 12, 1);
+    }
+  }
+  if (door !== null && !glowOnly) {
+    const x0 = door;
+    R(c, C.ol, x0, 3, 12, h - 4); R(c, C.b2, x0 + 1, 4, 10, h - 6); R(c, C.b3, x0 + 2, 5, 3, h - 9); R(c, C.b1, x0 + 6, 5, 4, h - 9);
+    R(c, C.b4, x0 + 2, 5, 1, h - 9); P(c, C.d5, x0 + 9, 13); P(c, C.d3, x0 + 9, 14);
+    R(c, C.gy3, x0 - 1, h - 3, 14, 3); R(c, C.gy2, x0 - 1, h - 1, 14, 1);
+  }
+  return cv;
+}
+
+function roofCanvas(style) {
+  const cv = mk(32, 32), c = cv.getContext("2d");
+  const rf = style === "tin" ? [C.t0, C.t1, C.t2, C.t3, C.t4] : [C.r0, C.r1, C.r2, C.r3, C.r4];
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
+    let col;
+    if (style === "tin") {
+      col = [rf[3], rf[2], rf[2], rf[1]][x % 4];
+      if (y % 16 === 15) col = rf[0];
+      if (y % 16 === 0) col = rf[4];
+    } else {
+      const row = Math.floor(y / 4), sx = (x + (row % 2) * 4) % 8;
+      col = row % 2 ? rf[2] : rf[3];
+      if (sx === 0) col = rf[1];
+      if (y % 4 === 3) col = rf[0];
+      if (y % 4 === 0 && sx !== 0) col = rf[4];
+      if (sx === 7 && y % 4 !== 3) col = rf[1];
+    }
+    P(c, col, x, y);
+  }
+  return cv;
+}
+
+// ================================================================ karakter 32 x 48, proporsi Octopath (sekitar 3 kepala)
+// Dibangun dari bentuk dengan mesin Pix: tiap bagian punya shading sabit sendiri, lalu outline berwarna.
+const CW = 32, CH = 48;
+const inRamp = (p, i, r) => r.includes(p.col[i]);
+function motif(p, ramp, y0, y1, fn) {               // pola kain: hanya di piksel yang berwarna kain itu
+  for (let y = y0; y < y1; y++) for (let x = 0; x < CW; x++) {
+    const i = y * CW + x;
+    if (!inRamp(p, i, ramp)) continue;
+    const c = fn(x, y);
+    if (c) p.col[i] = c;
+  }
+}
+function face(p, o, xs, hy, side) {
+  for (const x of xs) {
+    p.rect(o.hair[2], x, hy - 1, 2, 1);                                   // alis
+    if (o.sleepy) { p.rect("#2a1e30", x, hy + 1, 2, 1); p.dot(o.skin[2], x, hy); }
+    else { p.rect("#2a1e30", x, hy, 1, 2); p.dot("#ffffff", x + 1, hy + 1); p.dot(o.eye || "#5a3a2a", x, hy + 1); }
+  }
+  const mx = side ? xs[0] - 1 : 15;
+  p.rect(dark(o.skin[0], 0.72), mx, hy + 4, 2, 1);                          // mulut
+  if (!side) { p.dot(o.skin[2], 16, hy + 2); }                             // bayang hidung
+  for (const bx of side ? [xs[0] + 1] : [xs[0] - 1, xs[1] + 2]) p.dot(o.blush || "#f0a090", bx, hy + 3);
+}
+
+function composeChar(o, dir, frame) {
+  const p = new Pix(CW, CH);
+  const bob = frame ? 1 : 0, side = dir === "left", back = dir === "up";
+  const st = frame === 0 ? 0 : frame === 1 ? 1 : -1;
+  const S = o.skin, T = o.top, Pn = o.pants, Sh = o.shoe;
+  // kaki atau kain panjang
+  if (o.skirt) {
+    const hem = 44 - bob;
+    p.shape(o.skirt, side ? poly([[12, 31 - bob], [21, 31 - bob], [22.5, hem], [10, hem]]) : poly([[11, 31 - bob], [21, 31 - bob], [23.5, hem], [8.5, hem]]), 1);
+    if (o.skirtFx) o.skirtFx(p, dir, bob);
+    const feet = side ? [[15 + st * 2, frame === 1 ? 1 : 0]] : [[13, frame === 2 ? 1 : 0], [19, frame === 1 ? 1 : 0]];
+    for (const [x, lift] of feet) { p.rect(S[2], x - 1, hem, 2, 2 - lift); p.shape(Sh, ell(x + (side ? -0.8 : 0), 46 - lift, 2.6, 1.4)); }
+  } else {
+    const legs = side ? [[16 - st * 3, frame === 1 ? 2 : 0, true], [16 + st * 3, frame === 2 ? 2 : 0, false]]
+                      : [[13.4, frame === 2 ? 2 : 0, false], [18.6, frame === 1 ? 2 : 0, false]];
+    for (const [x, lift, behind] of legs) {
+      p.shape(behind ? [Pn[2], Pn[0], Pn[2]] : Pn, rrect(x - 2.3, 31 - bob, 4.6, 13 - lift, 1.5), 1);
+      if (o.cuff) p.rect(o.cuff, Math.round(x - 2), 42 - lift - bob, 4, 1);
+      p.shape(behind ? [Sh[2], Sh[0], Sh[2]] : Sh, ell(x + (side ? -1 : 0), 45.2 - lift, side ? 3.4 : 2.8, 1.9), 1);
+      if (o.sole) p.rect(o.sole, Math.round(x - 2.6 + (side ? -1 : 0)), 46 - lift, 5, 1);
+    }
+  }
+  // badan
+  p.shape(T, side ? rrect(11.5, 19 - bob, 10, 14, 3) : rrect(9.5, 19 - bob, 13, 14, 3.5), 1);
+  if (o.torsoFx) o.torsoFx(p, dir, bob);
+  // lengan dan tangan
+  const A = o.sleeve || T;
+  if (side) {
+    p.shape(A, ell(16.5 + st * 1.2, 25.5 - bob, 2.4, 6.2, -st * 0.25), 1);
+    p.shape(S, ell(16.5 + st * 2.6, 31.6 - bob, 1.9, 1.9));
+  } else {
+    for (const [x, s] of [[8.7, st], [23.3, -st]]) {
+      p.shape(A, ell(x, 25.5 - bob + s * 0.6, 2.4, 6.4), 1);
+      p.shape(S, ell(x, 32 - bob + s * 0.6, 1.9, 1.9));
+    }
+  }
+  if (o.armFx) o.armFx(p, dir, bob, st);
+  // leher dan kepala
+  p.rect(S[2], 15, 16 - bob, 3, 4);
+  const hx = side ? 15 : 16, hy = 11 - bob + (o.hunch || 0);
+  p.shape(S, ell(hx, hy, side ? 6.4 : 6.6, 7), 1);
+  if (!back) {
+    if (side) { p.shape(S, ell(hx - 6.2, hy + 2, 1.3, 1.1)); face(p, o, [hx - 4], hy, true); }
+    else face(p, o, [hx - 3, hx + 2], hy, false);
+  }
+  o.hairFn(p, dir, hx, hy, o.hair);
+  if (o.extra) o.extra(p, dir, hx, hy, bob);
+  p.outline();
+  return p.canvas();
+}
+
+const rel = (hx, hy, pts) => pts.map(([x, y]) => [hx + x, hy + y]);
+const HAIR = {
+  spiky(p, dir, hx, hy, H) {
+    const spikes = [[[-6, -4], [-9, -9], [-2, -6]], [[-3, -7], [-3, -12], [2, -7]], [[1, -7], [5, -12], [5, -5]], [[4, -5], [9, -8], [7, -1]]];
+    if (dir === "up") {
+      p.shape(H, ell(hx, hy - 0.5, 7.2, 7.4), 1);
+      for (const s of spikes) p.shape(H, poly(rel(hx, hy, s)), 1);
+      for (const s of [[[-6, 3], [-4, 8], [-2, 3]], [[-2, 4], [0, 9], [2, 4]], [[2, 3], [4, 8], [6, 2]]]) p.shape(H, poly(rel(hx, hy, s)), 1);
+      return;
+    }
+    if (dir === "left") {
+      p.shape(H, all(clip(0, 0, CW, hy - 1, ell(hx + 1, hy - 1, 7.3, 7)), ell(hx + 3, hy + 1, 4.6, 6.4)), 1);
+      for (const s of spikes.slice(1)) p.shape(H, poly(rel(hx + 1, hy, s)), 1);
+      for (const s of [[[-6.5, -3], [-7, 2], [-3.5, -2]], [[-4, -3], [-3, 1.5], [-1, -3]], [[5, -2], [10, 1], [6, 4]]]) p.shape(H, poly(rel(hx, hy, s)), 1);
+    } else {
+      p.shape(H, clip(0, 0, CW, hy - 1, ell(hx, hy - 1, 7.4, 7)), 1);
+      for (const s of spikes) p.shape(H, poly(rel(hx, hy, s)), 1);
+      for (const s of [[[-7, -3], [-6.5, 3.5], [-4, -2]], [[-4.5, -3], [-3, 1.5], [-1, -3]], [[-1.5, -3], [0.5, 1], [2, -3]], [[1.5, -3], [3.5, 1.5], [5, -3]], [[4.5, -3], [6.8, 3.5], [7.4, -2]]])
+        p.shape(H, poly(rel(hx, hy, s)), 1);
+    }
+    p.shape([H[1]], ell(hx - 2.5, hy - 4.5, 2.4, 0.9, -0.3));
+  },
+  messy(p, dir, hx, hy, H) {
+    if (dir === "up") {
+      p.shape(H, ell(hx, hy - 0.3, 7.6, 7.6), 1);
+      for (const s of [[[-7, 1], [-6, 8], [-3, 3]], [[-3, 3], [-1, 9], [1, 3]], [[1, 3], [3, 9], [5, 2]], [[4, 1], [7, 7], [7.5, 0]]]) p.shape(H, poly(rel(hx, hy, s)), 1);
+      return;
+    }
+    if (dir === "left") {
+      p.shape(H, all(clip(0, 0, CW, hy, ell(hx + 1, hy - 1, 7.6, 7.4)), ell(hx + 3, hy + 1.5, 5, 7)), 1);
+      for (const s of [[[-6.5, -2], [-6.5, 1], [-4, -2]], [[-4.5, -3], [-2.5, 0], [-1, -3]], [[4, 2], [8, 7], [5, 7]]]) p.shape(H, poly(rel(hx, hy, s)), 1);
+    } else {
+      p.shape(H, clip(0, 0, CW, hy, ell(hx, hy - 1, 7.8, 7.4)), 1);
+      for (const s of [[[-7.6, -2], [-7, 5.5], [-5, -1]], [[-5.5, -3], [-4, 0], [-2, -3]], [[-2.5, -3], [-0.5, 0.5], [1.5, -3]], [[1, -3], [3, 0], [4.5, -3]], [[4.5, -2], [7, 5.5], [7.8, -2]]])
+        p.shape(H, poly(rel(hx, hy, s)), 1);
+    }
+    p.shape([H[1]], ell(hx - 2.5, hy - 4.5, 2.6, 0.9, -0.3));
+  },
+  bun(p, dir, hx, hy, H) {
+    if (dir === "up") { p.shape(H, ell(hx, hy - 0.5, 7, 7.2), 1); p.shape(H, ell(hx, hy - 6, 3.8, 3.2), 1); p.rect("#c89a40", hx - 4, hy - 7, 8, 1); return; }
+    if (dir === "left") {
+      p.shape(H, all(clip(0, 0, CW, hy - 1, ell(hx + 1, hy - 1, 7, 6.8)), ell(hx + 3, hy, 4.2, 5.6)), 1);
+      p.shape(H, ell(hx + 5, hy - 4.5, 3.4, 3.2), 1); p.rect("#c89a40", hx + 3, hy - 6, 6, 1);
+      p.shape(H, poly(rel(hx, hy, [[-6.5, -3], [-5.5, 1], [-2, -3]])), 1);
+    } else {
+      p.shape(H, ell(hx, hy - 7.5, 3.6, 3), 1); p.rect("#c89a40", hx - 4, hy - 8, 8, 1);
+      p.shape(H, clip(0, 0, CW, hy - 1, ell(hx, hy - 1, 7, 6.8)), 1);
+      p.shape(H, all(poly(rel(hx, hy, [[-7, -2], [-6.5, 3], [-2, -4.5]])), poly(rel(hx, hy, [[7, -2], [6.5, 3], [2, -4.5]]))), 1);
+    }
+    p.shape([H[1]], ell(hx - 2.5, hy - 4.5, 2.2, 0.8, -0.3));
+  },
+};
+
+const CHARS = {
+  nino: {
+    skin: ["#e8b088", "#f8d0aa", "#c08660"], hair: ["#3a3048", "#5e5478", "#221a2e"], hairFn: HAIR.spiky, eye: "#4a3a2a",
+    top: ["#e8722a", "#ffa050", "#b04e1c"], pants: ["#3a5a9a", "#5a7ab8", "#26406e"], shoe: ["#eeeef4", "#ffffff", "#b0b0c0"], sole: "#e8722a",
+    torsoFx(p, dir, bob) {
+      if (dir === "up") { p.rect("#ffffff", 15, 21 - bob, 2, 10); return; }
+      if (dir === "left") { p.rect("#2a3050", 11, 21 - bob, 2, 10); p.rect("#ffffff", 14, 20 - bob, 1, 11); return; }
+      p.shape(["#2a3050", "#3a4270"], rrect(14, 20 - bob, 4, 12, 1));   // kaos gelap di balik jaket terbuka
+      p.rect("#ffffff", 11, 20 - bob, 1, 11); p.rect("#ffffff", 20, 20 - bob, 1, 11);   // garis balap
+      p.shape(["#ffa050", "#ffc890"], all(poly([[12, 18 - bob], [15, 18 - bob], [14, 22 - bob]]), poly([[17, 18 - bob], [20, 18 - bob], [18, 22 - bob]])));   // kerah
+      p.rect("#3a2a24", 10, 31 - bob, 12, 1); p.dot("#f8d050", 16, 31 - bob);   // sabuk
+    },
+    armFx(p, dir, bob, st) { if (dir !== "left") { p.rect("#ffffff", 8, 22 - bob + st, 1, 6); p.rect("#ffffff", 23, 22 - bob - st, 1, 6); } else p.rect("#ffffff", 16 + st, 22 - bob, 1, 6); },
+    extra(p, dir, hx, hy) { if (dir === "down") { p.dot("#f8e4cc", hx + 7, hy + 1); p.dot("#f8e4cc", hx + 7, hy + 2); } },
+  },
+  kael: {
+    skin: ["#f2c69c", "#ffe2c4", "#cc9a74"], hair: ["#7a4e32", "#a87450", "#4e301e"], hairFn: HAIR.messy, sleepy: true,
+    top: ["#8a96aa", "#aab6c8", "#646e84"], pants: ["#4a4a5c", "#62627a", "#34343e"], shoe: ["#5a5a70", "#7a7a94", "#3e3e4e"], cuff: "#34343e",
+    torsoFx(p, dir, bob) {
+      p.rect("#646e84", dir === "left" ? 12 : 10, 31 - bob, dir === "left" ? 9 : 12, 1);   // ujung hoodie
+      if (dir === "up") { p.shape(["#7a8698", "#9aa6b8", "#5a6478"], ell(16, 21 - bob, 5.5, 3.5)); return; }   // tudung di punggung
+      if (dir === "left") { p.shape(["#7a8698", "#9aa6b8"], ell(19, 20 - bob, 3, 2.5)); return; }
+      p.shape(["#7a8698", "#9aa6b8", "#5a6478"], rrect(11.5, 26 - bob, 9, 4, 1.5));   // kantong
+      p.rect("#ffffff", 14, 20 - bob, 1, 4); p.rect("#ffffff", 18, 20 - bob, 1, 4);   // tali hoodie
+    },
+    extra(p, dir, hx, hy, bob) {   // headset di leher
+      if (dir === "up") { p.rect("#2a2a38", 11, 18 - bob, 10, 1); return; }
+      if (dir === "left") { p.shape(["#2a2a38", "#4a4a5a"], ell(18, 18.5 - bob, 2.4, 2)); p.dot("#40f0d8", 18, 18 - bob); return; }
+      p.rect("#2a2a38", 12, 18 - bob, 8, 1);
+      for (const x of [10.5, 21.5]) { p.shape(["#2a2a38", "#4a4a5a"], ell(x, 19 - bob, 2.4, 2.2)); p.dot("#40f0d8", Math.round(x), 19 - bob); }
+    },
+  },
+  ibu: {
+    skin: ["#dca07a", "#f2c4a0", "#b47a56"], hair: ["#2e2430", "#504258", "#1a141e"], hairFn: HAIR.bun, eye: "#3a2a20",
+    top: ["#c8405e", "#e86a86", "#962c46"], skirt: ["#c8405e", "#e86a86", "#962c46"], shoe: ["#8a5a3a", "#b07a52", "#5e3a22"],
+    torsoFx(p, dir, bob) {
+      if (dir === "down") p.shape(["#dca07a", "#f2c4a0"], poly([[14, 19 - bob], [18, 19 - bob], [16, 22 - bob]]));   // garis leher
+      const R = ["#c8405e", "#e86a86", "#962c46"];
+      motif(p, R, 19, 45, (x, y) => ((x + (Math.floor(y / 4) % 2) * 2) % 4 === 0 && y % 4 === 0 ? "#ffd870" : (x % 4 === 1 && y % 4 === 2 ? "#7a1e34" : null)));
+    },
+    extra(p, dir, hx, hy) { if (dir === "down") { p.dot("#ffd040", hx - 7, hy + 3); p.dot("#ffd040", hx + 7, hy + 3); } },
+  },
+  nenek: {
+    skin: ["#dca482", "#f2c8a6", "#b47e5a"], hair: ["#c4c4d4", "#ececf6", "#8a8aa2"], hairFn: HAIR.bun, hunch: 1, eye: "#3a2a20",
+    top: ["#78b090", "#9ccdb0", "#4e8466"], skirt: ["#7a4e2e", "#9a6a42", "#56341c"], shoe: ["#6a4a3a", "#8a6a52", "#4a3022"],
+    torsoFx(p, dir, bob) {
+      p.rect("#ffffff", dir === "left" ? 12 : 10, 31 - bob, dir === "left" ? 9 : 12, 1);   // renda kebaya
+      if (dir === "down") { p.shape(["#ffd040", "#fff0a0"], ell(16, 22 - bob, 1.4, 1.2)); p.rect("#4e8466", 16, 23 - bob, 1, 8); }   // bros dan belahan
+    },
+    skirtFx(p, dir, bob) {
+      const R = ["#7a4e2e", "#9a6a42", "#56341c"];
+      motif(p, R, 31, 46, (x, y) => ((y + bob) % 5 === 0 ? "#d8a850" : ((x + y) % 6 === 0 ? "#3e2412" : null)));
+    },
+    extra(p, dir, hx, hy) {
+      if (dir === "up") return;
+      const xs = dir === "left" ? [hx - 4] : [hx - 3, hx + 2];
+      for (const x of xs) { p.rect("#6a4a3a", x - 1, hy - 1, 4, 1); p.rect("#6a4a3a", x - 1, hy + 2, 4, 1); p.dot("#6a4a3a", x - 1, hy); p.dot("#6a4a3a", x - 1, hy + 1); p.dot("#6a4a3a", x + 2, hy); p.dot("#6a4a3a", x + 2, hy + 1); }
+      if (xs.length > 1) p.rect("#6a4a3a", hx, hy, 1, 1);
+    },
+  },
+};
+
+// Satu lembar 384 x 48: arah bawah, atas, kiri, kanan, masing-masing 3 frame
+const DIRS = ["down", "up", "left", "right"];
+function makeSheet(o) {
+  const cv = mk(CW * 12, CH), c = cv.getContext("2d");
+  for (let f = 0; f < 3; f++) {
+    c.drawImage(composeChar(o, "down", f), f * CW, 0);
+    c.drawImage(composeChar(o, "up", f), (3 + f) * CW, 0);
+    const l = composeChar(o, "left", f);
+    c.drawImage(l, (6 + f) * CW, 0);
+    c.save(); c.translate((9 + f) * CW + CW, 0); c.scale(-1, 1); c.drawImage(l, 0, 0); c.restore();
+  }
+  return cv;
+}
+
 
 // ================================================================ keadaan permainan
 const NPCS = [
@@ -206,30 +709,85 @@ function updateCamera() {
   cam.z = clamp(player.y / TS + 0.5, CAM_BOUNDS.z0, CAM_BOUNDS.z1);
 }
 
-// ================================================================ dunia 3D low-poly
+// ================================================================ dunia 3D
 const glCanvas = document.getElementById("gl");
 const uiCanvas = document.getElementById("ui");
 const ctx = uiCanvas.getContext("2d");
-const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: false });
+const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: false, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-const SKY = "#9ed8ff";
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(SKY);
-scene.fog = new THREE.Fog(SKY, 42, 70);
+scene.background = new THREE.Color("#2c2240");
+scene.fog = new THREE.Fog("#5a3f62", 58, 90);
 
-const PITCH = THREE.MathUtils.degToRad(42), DIST = 30, FOV = 30;
+const PITCH = THREE.MathUtils.degToRad(44), DIST = 55, FOV = 22;
 const camera = new THREE.PerspectiveCamera(FOV, 9 / 16, 1, 200);
 
-const sun = new THREE.DirectionalLight("#fff1d6", 2.4);
+const pix = (cv, repeat) => {                      // tekstur pixel art: tanpa haluskan, tanpa mipmap
+  const t = new THREE.CanvasTexture(cv);
+  t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  t.colorSpace = THREE.SRGBColorSpace;
+  if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; }
+  return t;
+};
+
+// cahaya senja: matahari rendah dari kiri, langit ungu, pantulan tanah hangat
+const sun = new THREE.DirectionalLight("#ffbe80", 3.4);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 20, bottom: -20, near: 1, far: 80 });
-sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.03;
+Object.assign(sun.shadow.camera, { left: -18, right: 18, top: 22, bottom: -22, near: 1, far: 90 });
+sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02; sun.shadow.radius = 3;
 scene.add(sun, sun.target);
-scene.add(new THREE.HemisphereLight("#cfeaff", "#8a7a52", 1.5));
+scene.add(new THREE.HemisphereLight("#a596e0", "#6e5238", 1.7));
+
+// tanah
+const groundTex = pix(buildGround());
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(MW + 2 * M, MH + 2 * M), new THREE.MeshLambertMaterial({ map: groundTex }));
+ground.rotation.x = -Math.PI / 2;
+ground.position.set(MW / 2, 0, MH / 2);
+ground.receiveShadow = true;
+scene.add(ground);
+
+// billboard: bidang tegak yang dimiringkan ke arah kamera, berdiri di titik dasarnya
+const TILT = PITCH - THREE.MathUtils.degToRad(12);
+function billboardGeo(w, h) {
+  const g = new THREE.PlaneGeometry(w, h);
+  g.translate(0, h / 2, 0);
+  g.rotateX(-TILT);
+  return g;
+}
+const spriteMat = (tex, emissive) => new THREE.MeshLambertMaterial({
+  map: tex, alphaTest: 0.5, side: THREE.DoubleSide,
+  ...(emissive ? { emissiveMap: emissive, emissive: new THREE.Color("#ffc070"), emissiveIntensity: 2.2 } : {}),
+});
+
+// pohon dan palem memakai instancing agar ratusan pohon tetap ringan
+const treeTex = [makeTree(1), makeTree(2), makeTree(3)].map((c) => pix(c));
+const palmTex = [makePalm(1), makePalm(2)].map((c) => pix(c));
+const plants = treeTex.map(() => []).concat(palmTex.map(() => []));
+for (let ty = -M; ty < MH + M; ty++) for (let tx = -M; tx < MW + M; tx++) {
+  const t = tileAt(tx, ty), h = hash(tx, ty, 77);
+  if (t === TREE) plants[h % 3].push([tx + 0.5, ty + 0.6, 1]);
+  else if (t === PALM) plants[3 + (h % 2)].push([tx + 0.5, ty + 0.6, 1]);
+  else if (t === FOREST && h % 10 < 7) {
+    const jx = ((h >>> 4) % 100) / 100 - 0.5, jz = ((h >>> 11) % 100) / 100 - 0.5;
+    plants[(h >>> 3) % 10 < 8 ? (h >>> 6) % 3 : 3 + ((h >>> 7) % 2)].push([tx + 0.5 + jx * 0.6, ty + 0.5 + jz * 0.6, 1 + ((h >>> 15) % 40) / 100]);
+  }
+}
+const plantGeo = billboardGeo(2, 3);
+const dummy = new THREE.Object3D();
+plants.forEach((list, i) => {
+  const tex = i < 3 ? treeTex[i] : palmTex[i - 3];
+  const mesh = new THREE.InstancedMesh(plantGeo, spriteMat(tex), list.length);
+  list.forEach(([x, z, s], k) => {
+    dummy.position.set(x, 0, z); dummy.scale.set(s, s, s); dummy.updateMatrix();
+    mesh.setMatrixAt(k, dummy.matrix);
+  });
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  scene.add(mesh);
+});
 
 // material flat shading, disimpan per warna agar tidak berulang
 const matCache = {};
@@ -250,119 +808,6 @@ const cyl = (p, rt, rb, h, seg, col, x, y, z, rx, ry, rz) => add(p, new THREE.Cy
 const ball = (p, r, col, x, y, z, sx = 1, sy = 1, sz = 1, detail = 1) => { const m = add(p, new THREE.IcosahedronGeometry(r, detail), col, x, y, z); m.scale.set(sx, sy, sz); return m; };
 const cone = (p, r, h, seg, col, x, y, z, rx, ry, rz) => add(p, new THREE.ConeGeometry(r, h, seg), col, x, y, z, rx, ry, rz);
 
-// ---------------------------------------------------------------- tanah per tile dengan warna vertex
-const isWater = (x, y) => tileAt(x, y) === WATER;
-const GROUND_COL = {
-  grass: ["#72c44c", "#75c74e", "#70c24a", "#77c950"],
-  road: ["#d6a868", "#d4a666", "#d8aa6a"],
-  field: ["#8a5a36", "#80532f"],
-  forest: ["#4f9a3a", "#559f3e"],
-  sand: "#ecd9a0", pondBed: "#4a9ac8",
-};
-function buildGround() {
-  const pos = [], col = [], c = new THREE.Color();
-  const quad = (a, b, d, e, color) => {
-    pos.push(...a, ...b, ...d, ...a, ...d, ...e);
-    c.set(color).convertSRGBToLinear();
-    for (let i = 0; i < 6; i++) col.push(c.r, c.g, c.b);
-  };
-  const MARGIN = 10;
-  for (let ty = -MARGIN; ty < MH + MARGIN; ty++) for (let tx = -MARGIN; tx < MW + MARGIN; tx++) {
-    const t = tileAt(tx, ty), h = hash(tx, ty, 5);
-    let color = GROUND_COL.grass[h % 4], y = 0;
-    if (t === ROAD || t === HOUSE) color = GROUND_COL.road[h % 3];
-    if (t === FIELD) color = GROUND_COL.field[h % 2];
-    if (t === FOREST) color = GROUND_COL.forest[h % 2];
-    if (t === WATER) { color = GROUND_COL.pondBed; y = -0.35; }
-    quad([tx, y, ty + 1], [tx + 1, y, ty + 1], [tx + 1, y, ty], [tx, y, ty], color);
-    if (t === WATER) {                                 // dinding pasir di tepi kolam
-      if (!isWater(tx, ty - 1)) quad([tx, -0.35, ty], [tx + 1, -0.35, ty], [tx + 1, 0, ty], [tx, 0, ty], GROUND_COL.sand);
-      if (!isWater(tx, ty + 1)) quad([tx + 1, -0.35, ty + 1], [tx, -0.35, ty + 1], [tx, 0, ty + 1], [tx + 1, 0, ty + 1], GROUND_COL.sand);
-      if (!isWater(tx - 1, ty)) quad([tx, -0.35, ty + 1], [tx, -0.35, ty], [tx, 0, ty], [tx, 0, ty + 1], GROUND_COL.sand);
-      if (!isWater(tx + 1, ty)) quad([tx + 1, -0.35, ty], [tx + 1, -0.35, ty + 1], [tx + 1, 0, ty + 1], [tx + 1, 0, ty], GROUND_COL.sand);
-    }
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
-  g.computeVertexNormals();
-  const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
-  m.receiveShadow = true;
-  scene.add(m);
-}
-buildGround();
-
-// kolam: air bergelombang
-const waterGeo = new THREE.PlaneGeometry(5, 4, 10, 8);
-waterGeo.rotateX(-Math.PI / 2);
-const water = new THREE.Mesh(waterGeo, new THREE.MeshLambertMaterial({ color: "#58b4f0", transparent: true, opacity: 0.82, flatShading: true }));
-water.position.set(13 + 2.5, -0.08, 24 + 2);
-scene.add(water);
-const waterBase = waterGeo.attributes.position.array.slice();
-
-// ---------------------------------------------------------------- instancing: rumput, bunga, pohon, palem
-function instanced(geo, color, list, cast = true) {   // list: [x, y, z, rx, ry, rz, sx, sy, sz, warna?]
-  const m = new THREE.InstancedMesh(geo, mat(color), list.length);
-  const o = new THREE.Object3D(), c = new THREE.Color();
-  list.forEach((v, i) => {
-    o.position.set(v[0], v[1], v[2]); o.rotation.set(v[3] || 0, v[4] || 0, v[5] || 0);
-    o.scale.set(v[6] || 1, v[7] || v[6] || 1, v[8] || v[6] || 1); o.updateMatrix();
-    m.setMatrixAt(i, o.matrix);
-    if (v[9]) m.setColorAt(i, c.set(v[9]));
-  });
-  m.castShadow = cast; m.receiveShadow = true;
-  scene.add(m);
-  return m;
-}
-const tufts = [], flowers = [], trunks = [], canopies = [], palmSeg = [], palmLeaf = [], coconuts = [], fruits = [];
-const FLOWER_COL = ["#ffffff", "#ffe050", "#ff8ab0", "#a8c8ff"];
-function plantTree(x, z, s, seed, fruit) {
-  trunks.push([x, 0.45 * s, z, 0, 0, 0, s, s, s]);
-  const greens = ["#4caf50", "#5cbf52", "#45a24a"];
-  const blobs = [[0, 1.35, 0, 0.62], [-0.38, 1.1, 0.12, 0.42], [0.4, 1.12, 0.05, 0.44], [0.05, 1.05, 0.38, 0.4], [0.1, 1.72, -0.05, 0.38]];
-  blobs.forEach(([bx, by, bz, r], k) => {
-    canopies.push([x + bx * s, by * s, z + bz * s, rnd(seed, k, 1), rnd(seed, k, 2) * 3, 0, r * s * 1.6, r * s * 1.45, r * s * 1.6, greens[(seed + k) % 3]]);
-    if (fruit && k < 4) for (let f = 0; f < 2; f++)
-      fruits.push([x + (bx + (rnd(seed, k * 3 + f, 3) - 0.5) * r) * s, (by - 0.1 + (rnd(seed, f, k) - 0.3) * r) * s, z + (bz + r * 0.9) * s]);
-  });
-}
-function plantPalm(x, z, seed) {
-  const bend = seed % 2 ? 1 : -1;
-  let px = x, py = 0;
-  for (let i = 0; i < 7; i++) {                      // batang beruas melengkung
-    const t = i / 6, lean = bend * 0.18 * t;
-    palmSeg.push([px, py + 0.17, z, 0, 0, -lean, 1.4 - t * 0.35, 1, 1.4 - t * 0.35]);
-    px += Math.sin(lean) * 0.32; py += 0.32;
-  }
-  for (let k = 0; k < 7; k++) {                      // daun menjuntai
-    const a = (k / 7) * Math.PI * 2 + seed;
-    palmLeaf.push([px + Math.cos(a) * 0.45, py - 0.05, z + Math.sin(a) * 0.45, 0, -a, 0.45, 1, 1, 1, k % 2 ? "#5cbf52" : "#72d260"]);
-  }
-  for (let k = 0; k < 3; k++) coconuts.push([px + Math.cos(k * 2.1) * 0.13, py - 0.12, z + Math.sin(k * 2.1) * 0.13]);
-}
-for (let ty = -10; ty < MH + 10; ty++) for (let tx = -10; tx < MW + 10; tx++) {
-  const t = tileAt(tx, ty), h = hash(tx, ty, 7);
-  if (t === GRASS) {
-    for (let k = 0; k < 3; k++) if (rnd(tx, ty, 20 + k) < 0.55)
-      tufts.push([tx + rnd(tx, ty, 30 + k), 0.06, ty + rnd(tx, ty, 40 + k), 0, rnd(tx, ty, k), 0, 0.8 + rnd(tx, ty, 50 + k) * 0.6]);
-    if (h % 7 === 0) for (let k = 0; k < 3; k++)
-      flowers.push([tx + 0.2 + rnd(tx, ty, 60 + k) * 0.6, 0.1, ty + 0.2 + rnd(tx, ty, 70 + k) * 0.6, 0, 0, 0, 1, 1, 1, FLOWER_COL[(h >>> 4) % 4]]);
-  }
-  if (t === TREE) plantTree(tx + 0.5, ty + 0.5, 1, h % 97, h % 3 === 1);
-  if (t === PALM) plantPalm(tx + 0.5, ty + 0.5, h % 97);
-  if (t === FOREST && h % 10 < 8) plantTree(tx + 0.5 + (rnd(tx, ty, 8) - 0.5) * 0.5, ty + 0.5 + (rnd(tx, ty, 9) - 0.5) * 0.5, 1.1 + rnd(tx, ty, 10) * 0.5, h % 97, false);
-}
-instanced(new THREE.ConeGeometry(0.05, 0.16, 3), "#4e9e36", tufts, false);
-instanced(new THREE.IcosahedronGeometry(0.05, 0), "#ffffff", flowers, false);
-instanced(new THREE.CylinderGeometry(0.1, 0.16, 0.9, 6), "#8a5a34", trunks);
-instanced(new THREE.IcosahedronGeometry(0.5, 0), "#4caf50", canopies);
-instanced(new THREE.IcosahedronGeometry(0.06, 0), "#ff9a30", fruits);
-instanced(new THREE.CylinderGeometry(0.1, 0.12, 0.34, 6), "#a87a4a", palmSeg);
-const leafGeo = new THREE.ConeGeometry(0.24, 0.9, 4);
-leafGeo.rotateZ(-Math.PI / 2); leafGeo.translate(0.45, 0, 0); leafGeo.scale(1, 0.35, 1);
-instanced(leafGeo, "#4caf50", palmLeaf);
-instanced(new THREE.IcosahedronGeometry(0.09, 0), "#7a5a24", coconuts);
-
 // ---------------------------------------------------------------- kebun sayur
 for (let ty = 0; ty < MH; ty++) for (let tx = 0; tx < MW; tx++) {
   if (map[ty][tx] !== FIELD) continue;
@@ -375,15 +820,34 @@ for (let ty = 0; ty < MH; ty++) for (let tx = 0; tx < MW; tx++) {
   }
 }
 
-// ---------------------------------------------------------------- lampu jalan kayu
-for (let ty = 0; ty < MH; ty++) for (let tx = 0; tx < MW; tx++) {
-  if (map[ty][tx] !== LAMP) continue;
-  const g = new THREE.Group(); g.position.set(tx + 0.5, 0, ty + 0.5); scene.add(g);
-  cyl(g, 0.05, 0.07, 1.7, 6, "#8a5a34", 0, 0.85, 0);
-  box(g, 0.24, 0.08, 0.24, "#5a3a24", 0, 0.05, 0);
-  box(g, 0.2, 0.24, 0.2, "#ffe48a", 0, 1.78, 0, 0, 0, 0, { emissive: "#ffcc55", emissiveIntensity: 0.6 });
-  cone(g, 0.2, 0.14, 4, "#3a3a4a", 0, 1.97, 0, 0, Math.PI / 4, 0);
+// tekstur papan kayu dan atap bertekstur untuk rumah 3D (16 piksel per tile)
+function plankTex(base, alt, w, h) {
+  const cv = mk(32, 32), c = cv.getContext("2d");
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
+    let col = x % 4 === 0 ? dark(alt, 0.8) : (x % 8 < 4 ? base : alt);
+    if (x % 4 === 1) col = base;
+    if (hash(x >> 2, y, 3) % 23 === 0) col = dark(alt, 0.85);       // serat kayu
+    P(c, col, x, y);
+  }
+  const t = pix(cv, true); t.repeat.set(w * 16 / 32, h * 16 / 32);
+  return t;
 }
+function texRoof(g, w, h, d, y0, z0, tex) {
+  const xa = -w / 2, xb = w / 2, zF = z0 + d / 2 + 0.01, zB = z0 - d / 2 - 0.01, zM = z0, yE = y0 - 0.01, yR = y0 + h + 0.01;
+  const ru = w * 16 / 32, rv = Math.hypot(d / 2, h) * 16 / 32;
+  const pos = [], uv = [];
+  const quad = (a, b, c, e) => { pos.push(...a, ...b, ...c, ...a, ...c, ...e); uv.push(0, 0, ru, 0, ru, rv, 0, 0, ru, rv, 0, rv); };
+  quad([xa, yE, zF], [xb, yE, zF], [xb, yR, zM], [xa, yR, zM]);
+  quad([xb, yE, zB], [xa, yE, zB], [xa, yR, zM], [xb, yR, zM]);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: tex, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 }));
+  m.castShadow = m.receiveShadow = true;
+  g.add(m);
+}
+const roofTex = { clay: pix(roofCanvas("clay"), true), tin: pix(roofCanvas("tin"), true) };
 
 // ---------------------------------------------------------------- rumah panggung Minahasa
 function prism(w, h, d) {                            // atap pelana, bubungan sejajar sumbu x
@@ -396,6 +860,7 @@ function prism(w, h, d) {                            // atap pelana, bubungan se
 function buildHouse(tx, tz, st) {
   const g = new THREE.Group();
   g.position.set(tx + 2, 0, tz + 1.5);               // tengah tapak 4 x 3
+  g.scale.set(1.08, 1.35, 1);                        // lebih tinggi agar sebanding dengan karakter
   scene.add(g);
   const FL = 0.55;                                    // tinggi lantai panggung
   // tiang dan kisi kolong
@@ -408,8 +873,9 @@ function buildHouse(tx, tz, st) {
   box(g, 3.9, 0.12, 2.8, st.floor, 0, FL + 0.06, 0.05);
   // dinding papan
   const WY = FL + 0.12, WH = 1.35;
-  box(g, 3.4, WH, 1.9, st.wall, 0, WY + WH / 2, -0.4);
-  for (let i = 0; i < 14; i++) box(g, 0.035, WH - 0.02, 0.02, st.wall2, -1.62 + i * 0.25, WY + WH / 2, 0.56);
+  const wallTex = plankTex(st.wall, st.wall2, 3.4, WH);
+  const wall = new THREE.Mesh(new THREE.BoxGeometry(3.4, WH, 1.9), new THREE.MeshLambertMaterial({ map: wallTex }));
+  wall.position.set(0, WY + WH / 2, -0.4); g.add(wall);
   for (const x of [-1.7, 1.7]) box(g, 0.12, WH, 0.12, st.trim, x, WY + WH / 2, 0.56);
   box(g, 3.5, 0.1, 0.06, st.trim, 0, WY + WH - 0.05, 0.58);
   // pintu dua daun dan jendela berdaun jalusi
@@ -418,7 +884,7 @@ function buildHouse(tx, tz, st) {
   ball(g, 0.025, "#ffd040", 0.05, WY + 0.43, 0.65, 1, 1, 1, 0);
   for (const x of [-1.05, 1.05]) {
     box(g, 0.66, 0.56, 0.05, st.trim, x, WY + 0.6, 0.58);
-    box(g, 0.54, 0.44, 0.04, "#8fd0f0", x, WY + 0.6, 0.6, 0, 0, 0, { emissive: "#305060", emissiveIntensity: 0.3 });
+    box(g, 0.54, 0.44, 0.04, "#ffd890", x, WY + 0.6, 0.6, 0, 0, 0, { emissive: "#ffb050", emissiveIntensity: 1.8 });
     box(g, 0.04, 0.44, 0.02, st.trim, x, WY + 0.6, 0.63); box(g, 0.54, 0.04, 0.02, st.trim, x, WY + 0.62, 0.63);
     box(g, 0.2, 0.18, 0.02, st.curtain, x + 0.15, WY + 0.72, 0.625);
     for (const side of [-1, 1]) {                     // daun jendela terbuka
@@ -452,11 +918,8 @@ function buildHouse(tx, tz, st) {
   }
   // atap pelana besar dan atap kecil di atas pintu
   const RT = WY + WH;
-  const roof = add(g, prism(4.2, 0.95, 3.0), st.roof, 0, RT, -0.1);
-  for (let k = 0; k < (st.tin ? 16 : 7); k++) {      // alur genteng atau seng
-    if (st.tin) box(g, 0.035, 0.03, 1.75, st.roof2, -2.0 + k * 0.27, RT + 0.49, 0.62, -0.565, 0, 0);
-    else box(g, 4.2, 0.05, 0.05, st.roof2, 0, RT + 0.1 + k * 0.13, 1.33 - k * 0.205);
-  }
+  add(g, prism(4.2, 0.95, 3.0), st.roof2, 0, RT, -0.1);
+  texRoof(g, 4.2, 0.95, 3.0, RT, -0.1, roofTex[st.tin ? "tin" : "clay"]);   // permukaan genteng atau seng bertekstur
   box(g, 4.3, 0.1, 0.12, st.trim, 0, RT + 0.93, -0.1);   // bubungan
   for (const s of [-1, 1]) box(g, 0.08, 0.08, 1.85, st.trim, s * 2.12, RT + 0.47, 0.62, -0.565, 0, 0);   // lisplang samping
   const front = add(g, prism(1.3, 0.7, 1.6), st.roof, 0, RT + 0.05, 1.05);
@@ -465,7 +928,8 @@ function buildHouse(tx, tz, st) {
   const tri = new THREE.Shape(); tri.moveTo(-0.62, 0); tri.lineTo(0.62, 0); tri.lineTo(0, 0.6); tri.lineTo(-0.62, 0);
   add(g, new THREE.ShapeGeometry(tri), st.trim, 0, RT + 0.06, 1.71);
   for (let k = 0; k < 6; k++) cone(g, 0.05, 0.1, 4, st.trim, -0.5 + k * 0.2, RT + 0.0, 1.73, Math.PI, 0, 0);   // ukiran lisplang
-  box(g, 0.1, 0.14, 0.1, "#ffe48a", 0.55, RT - 0.12, 1.25, 0, 0, 0, { emissive: "#ffcc55", emissiveIntensity: 0.5 });
+  box(g, 0.1, 0.14, 0.1, "#ffe48a", 0.55, RT - 0.12, 1.25, 0, 0, 0, { emissive: "#ffcc55", emissiveIntensity: 2.5 });
+  const pl = new THREE.PointLight("#ffa850", 5, 4.5, 2); pl.position.set(0.55, RT - 0.3, 1.6); g.add(pl);
   g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return g;
 }
@@ -474,134 +938,182 @@ buildHouse(3, 4, { post: "#6a4a32", floor: "#a0703f", wall: "#d8a868", wall2: "#
 buildHouse(13, 4, { post: "#5a5a64", floor: "#8a6a4a", wall: "#9ccbe8", wall2: "#86b6d4", trim: "#ffffff", trim2: "#7a8a9a",
   door: "#5a6a8a", curtain: "#ffd060", shutter: "#d0603a", shutter2: "#a8482a", roof: "#7a8aa0", roof2: "#5a687c", tin: true });
 
-// ---------------------------------------------------------------- karakter chibi low-poly
-// Titik asal di telapak kaki. Lengan dan kaki punya engsel agar bisa mengayun saat berjalan.
-function buildChar(o) {
-  const root = new THREE.Group(), body = new THREE.Group();
-  root.add(body);
-  const limb = (x, y, w, h, d, col, endCol, endSize) => {
-    const piv = new THREE.Group(); piv.position.set(x, y, 0); body.add(piv);
-    box(piv, w, h, d, col, 0, -h / 2, 0);
-    if (endCol) box(piv, endSize[0], endSize[1], endSize[2], endCol, 0, -h - endSize[1] / 2 + 0.02, endSize[2] / 2 - d / 2);
-    return piv;
-  };
-  const legs = o.dress
-    ? [limb(-0.1, 0.22, 0.1, 0.16, 0.1, o.skin, o.shoe, [0.13, 0.07, 0.18]), limb(0.1, 0.22, 0.1, 0.16, 0.1, o.skin, o.shoe, [0.13, 0.07, 0.18])]
-    : [limb(-0.11, 0.4, 0.15, 0.3, 0.15, o.pants, o.shoe, [0.17, 0.09, 0.24]), limb(0.11, 0.4, 0.15, 0.3, 0.15, o.pants, o.shoe, [0.17, 0.09, 0.24])];
-  if (o.dress) cyl(body, 0.22, 0.34, 0.5, 8, o.dress, 0, 0.4, 0);
-  cyl(body, 0.2, 0.24, 0.4, 8, o.top, 0, 0.6, 0).scale.z = 0.8;
-  const arms = [limb(-0.27, 0.76, 0.11, 0.3, 0.12, o.sleeve || o.top, o.skin, [0.1, 0.1, 0.1]), limb(0.27, 0.76, 0.11, 0.3, 0.12, o.sleeve || o.top, o.skin, [0.1, 0.1, 0.1])];
-  arms[0].rotation.z = -0.12; arms[1].rotation.z = 0.12;
-  const head = new THREE.Group(); head.position.set(0, 1.1, 0); body.add(head);
-  ball(head, 0.34, o.skin, 0, 0, 0, 1, 0.95, 0.92);
-  for (const s of [-1, 1]) ball(head, 0.07, o.skin, s * 0.32, -0.02, 0, 1, 1.2, 1, 0);   // telinga
-  // wajah
-  for (const s of [-1, 1]) {
-    box(head, 0.075, o.sleepy ? 0.07 : 0.12, 0.03, "#2a1e30", s * 0.12, -0.02, 0.3);
-    if (!o.sleepy) box(head, 0.03, 0.03, 0.02, "#ffffff", s * 0.12 - 0.02, 0.02, 0.32);
-    box(head, 0.08, 0.025, 0.02, o.hair[1], s * 0.12, o.sleepy ? 0.04 : 0.1, 0.3);      // alis
-    box(head, 0.07, 0.035, 0.02, "#f49a9a", s * 0.19, -0.11, 0.27);                     // pipi merona
-  }
-  box(head, 0.07, 0.025, 0.02, "#a04a3a", 0, -0.15, 0.3);                               // mulut
-  o.hairFn(head, o.hair);
-  if (o.extra) o.extra({ root, body, head, arms, legs });
-  root.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = false; } });
-  body.scale.setScalar(1.3);                          // proporsi besar ala Harvest Moon 64
-  return { root, body, head, arms, legs, walk: 0, yaw: 0 };
-}
-const HAIR = {
-  spiky(h, c) {
-    ball(h, 0.36, c[0], 0, 0.11, -0.07, 1.04, 0.88, 0.96);
-    for (const [x, y, z, rx, rz, l] of [[0, 0.36, -0.05, -0.3, 0, 0.3], [-0.2, 0.3, 0, -0.1, 0.7, 0.28], [0.2, 0.3, 0, -0.1, -0.7, 0.28],
-      [0, 0.25, -0.28, -1.2, 0, 0.3], [-0.25, 0.15, -0.2, -0.8, 0.9, 0.26], [0.25, 0.15, -0.2, -0.8, -0.9, 0.26], [-0.33, 0.05, 0.05, 0, 1.5, 0.2], [0.33, 0.05, 0.05, 0, -1.5, 0.2]])
-      cone(h, 0.11, l, 4, c[0], x, y, z, rx, 0, rz);
-    for (const [x, rz] of [[-0.2, 0.25], [-0.07, 0.08], [0.07, -0.08], [0.2, -0.25]]) cone(h, 0.07, 0.2, 4, c[0], x, 0.14, 0.27, Math.PI - 0.5, 0, rz);   // poni
-    box(h, 0.16, 0.03, 0.05, c[2], -0.1, 0.33, 0.12, -0.4, 0, 0.3);                       // kilau
-  },
-  messy(h, c) {
-    ball(h, 0.37, c[0], 0, 0.1, -0.08, 1.06, 0.92, 0.98);
-    for (const [x, y, z] of [[-0.24, 0.24, 0.12], [0.24, 0.24, 0.12], [0, 0.32, 0.1], [-0.3, 0.0, -0.05], [0.3, 0.0, -0.05], [0, 0.05, -0.3], [-0.18, 0.3, -0.18], [0.18, 0.3, -0.18]])
-      ball(h, 0.14, c[0], x, y, z, 1, 0.8, 1, 0);
-    for (const [x, rz] of [[-0.16, 0.2], [0.02, 0], [0.18, -0.25]]) cone(h, 0.09, 0.22, 4, c[0], x, 0.14, 0.27, Math.PI - 0.45, 0, rz);
-    box(h, 0.14, 0.03, 0.05, c[2], -0.12, 0.34, 0.1, -0.4, 0, 0.3);
-  },
-  bun(h, c) {
-    ball(h, 0.355, c[0], 0, 0.11, -0.07, 1.03, 0.88, 0.96);
-    for (const s of [-1, 1]) ball(h, 0.17, c[0], s * 0.15, 0.2, 0.17, 1.1, 0.6, 0.8, 0);   // belahan poni
-    ball(h, 0.16, c[0], 0, 0.3, -0.24);                                                   // sanggul
-    box(h, 0.03, 0.03, 0.4, "#c89a40", 0.04, 0.33, -0.24, 0, 0.6, 0);                     // tusuk konde
-    box(h, 0.12, 0.03, 0.05, c[2], -0.12, 0.33, 0.1, -0.4, 0, 0.3);
-  },
-};
-const CHARS = {
-  nino: { skin: "#f0c090", hair: ["#3a3048", "#2a2234", "#6a5e86"], hairFn: HAIR.spiky, top: "#f07a2a", pants: "#3a5aa8", shoe: "#f4f4f8",
-    extra({ body, head, arms }) {
-      box(body, 0.12, 0.34, 0.05, "#2a3050", 0, 0.6, 0.18);                                // kaos di balik jaket terbuka
-      for (const a of arms) box(a, 0.115, 0.04, 0.125, "#ffffff", 0, -0.12, 0);             // garis putih lengan
-      box(head, 0.04, 0.07, 0.05, "#f8e4cc", 0.36, -0.04, 0.03);                            // alat bantu dengar
-    } },
-  kael: { skin: "#f6cca0", hair: ["#8a5a3a", "#6a4228", "#b8885e"], hairFn: HAIR.messy, top: "#8a96aa", pants: "#4a4a5c", shoe: "#5a5a70", sleepy: true,
-    extra({ body }) {
-      add(body, new THREE.TorusGeometry(0.17, 0.06, 4, 8), "#727e94", 0, 0.8, -0.04, Math.PI / 2, 0, 0);   // tudung hoodie
-      box(body, 0.2, 0.1, 0.05, "#727e94", 0, 0.5, 0.18);                                   // kantong
-      for (const s of [-1, 1]) box(body, 0.015, 0.12, 0.02, "#ffffff", s * 0.05, 0.72, 0.19);   // tali hoodie
-      add(body, new THREE.TorusGeometry(0.19, 0.03, 4, 10), "#2a2a38", 0, 0.86, 0.02, Math.PI / 2 - 0.2, 0, 0);   // headset di leher
-      for (const s of [-1, 1]) cyl(body, 0.07, 0.07, 0.05, 8, "#2a2a38", s * 0.19, 0.86, 0.02, 0, 0, Math.PI / 2);
-      for (const s of [-1, 1]) box(body, 0.02, 0.05, 0.05, "#40f0d8", s * 0.22, 0.86, 0.02, 0, 0, 0, { emissive: "#40f0d8", emissiveIntensity: 0.8 });
-    } },
-  ibu: { skin: "#e8b088", hair: ["#2e2430", "#1a141e", "#5a4a62"], hairFn: HAIR.bun, top: "#d84a6a", dress: "#d84a6a", sleeve: "#d84a6a", shoe: "#8a5a3a",
-    extra({ body, head }) {
-      for (let k = 0; k < 12; k++) {                                                        // motif batik daster
-        const a = k * 0.52, y = 0.3 + (k % 3) * 0.13;
-        ball(body, 0.03, "#ffe08a", Math.sin(a) * (0.3 - (y - 0.3) * 0.5), y, Math.cos(a) * (0.3 - (y - 0.3) * 0.5), 1, 1, 0.4, 0);
-      }
-      for (const s of [-1, 1]) ball(head, 0.025, "#ffd040", s * 0.33, -0.12, 0.02, 1, 1, 1, 0);   // anting
-    } },
-  nenek: { skin: "#e8b490", hair: ["#d4d4e0", "#a4a4b8", "#ffffff"], hairFn: HAIR.bun, top: "#6aa880", dress: "#7a5232", sleeve: "#6aa880", shoe: "#6a4a3a",
-    extra({ body, head }) {
-      for (let k = 0; k < 3; k++) add(body, new THREE.TorusGeometry(0.31 - k * 0.04, 0.012, 3, 12), "#e8c870", 0, 0.28 + k * 0.12, 0, Math.PI / 2, 0, 0);   // garis sarung
-      add(body, new THREE.TorusGeometry(0.235, 0.025, 3, 10), "#ffffff", 0, 0.42, 0, Math.PI / 2, 0, 0);   // renda kebaya
-      ball(body, 0.04, "#ffd040", 0, 0.72, 0.2, 1, 1, 1, 0);                                  // bros
-      for (const s of [-1, 1]) add(head, new THREE.TorusGeometry(0.075, 0.014, 4, 10), "#6a4a3a", s * 0.12, -0.02, 0.32);   // kacamata
-      box(head, 0.09, 0.014, 0.014, "#6a4a3a", 0, 0.0, 0.33);
-      head.rotation.x = 0.12; head.position.z = 0.03;                                         // sedikit membungkuk
-    } },
-};
 
-// ---------------------------------------------------------------- aktor
-const DIR_YAW = { down: 0, right: Math.PI / 2, up: Math.PI, left: -Math.PI / 2 };
-const playerActor = buildChar(CHARS.nino); scene.add(playerActor.root);
-for (const n of NPCS) { n.actor = buildChar(CHARS[n.char]); scene.add(n.actor.root); }
-function poseActor(a, x, z, dir, walk, dt) {
-  a.root.position.set(x, 0, z);
-  let d = DIR_YAW[dir] - a.yaw;                       // berputar halus ke arah tujuan
-  d = Math.atan2(Math.sin(d), Math.cos(d));
-  a.yaw += d * Math.min(1, dt * 14);
-  a.root.rotation.y = a.yaw;
-  const s = walk > 0 ? Math.sin(walk * 11) : 0;
-  a.legs[0].rotation.x = s * 0.7; a.legs[1].rotation.x = -s * 0.7;
-  a.arms[0].rotation.x = -s * 0.8; a.arms[1].rotation.x = s * 0.8;
-  a.body.position.y = walk > 0 ? Math.abs(Math.sin(walk * 11)) * 0.06 : 0;
+// lampu jalan: tiang billboard, cahaya titik, dan halo
+const haloTex = (() => {
+  const cv = mk(64, 64), c = cv.getContext("2d");
+  const g = c.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, "rgba(255,210,140,0.9)"); g.addColorStop(0.35, "rgba(255,170,80,0.35)"); g.addColorStop(1, "rgba(255,140,60,0)");
+  c.fillStyle = g; c.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(cv);
+})();
+const lampGeo = billboardGeo(1, 2.5);
+const lampMat = spriteMat(pix(makeLamp(false)), pix(makeLamp(true)));
+const halos = [];
+for (let ty = 0; ty < MH; ty++) for (let tx = 0; tx < MW; tx++) {
+  if (map[ty][tx] !== LAMP) continue;
+  const m = new THREE.Mesh(lampGeo, lampMat);
+  m.position.set(tx + 0.5, 0, ty + 0.55); m.castShadow = true;
+  scene.add(m);
+  const top = new THREE.Vector3(0, 2.3, 0).applyAxisAngle(new THREE.Vector3(1, 0, 0), -TILT).add(m.position);
+  const pl = new THREE.PointLight("#ffa54f", 9, 6, 2);
+  pl.position.copy(top);
+  scene.add(pl);
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }));
+  halo.position.copy(top); halo.scale.set(1.6, 1.6, 1);
+  scene.add(halo); halos.push(halo);
+}
+
+// kolam: kilau piksel bergerak di atas tekstur air
+const waterMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false,
+  uniforms: { uTime: { value: 0 }, uSize: { value: new THREE.Vector2(5 * 16, 4 * 16) } },
+  vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
+  fragmentShader: `
+    varying vec2 vUv; uniform float uTime; uniform vec2 uSize;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    void main(){
+      vec2 p = floor(vUv * uSize);
+      vec2 e = min(p, uSize - 1.0 - p);
+      if (min(e.x, e.y) < 4.0) discard;
+      float a = 0.0; vec3 col = vec3(0.85, 0.95, 1.0);
+      float wave = sin(p.y * 0.55 + uTime * 1.6 + sin(p.x * 0.12 + uTime * 0.7) * 2.0);
+      if (wave > 0.93 && mod(p.x + floor(uTime * 6.0), 5.0) < 3.0) a = 0.55;
+      if (h(p + floor(uTime * 2.5)) > 0.992) a = 0.95;
+      a += 0.12 * (0.5 + 0.5 * sin(uTime * 0.8 + p.x * 0.05));
+      col = mix(vec3(1.0, 0.7, 0.45), col, a);
+      gl_FragColor = vec4(col, a);
+    }`,
+});
+const water = new THREE.Mesh(new THREE.PlaneGeometry(5, 4), waterMat);
+water.rotation.x = -Math.PI / 2; water.position.set(13 + 2.5, 0.01, 24 + 2);
+scene.add(water);
+
+// kunang-kunang
+const FLY = 40;
+const flyPos = new Float32Array(FLY * 3), flySeed = new Float32Array(FLY);
+for (let i = 0; i < FLY; i++) {
+  flyPos[i * 3] = 1 + (hash(i, 1, 90) % 1800) / 100;
+  flyPos[i * 3 + 1] = 0.3 + (hash(i, 2, 90) % 150) / 100;
+  flyPos[i * 3 + 2] = 1 + (hash(i, 3, 90) % 3000) / 100;
+  flySeed[i] = (hash(i, 4, 90) % 1000) / 100;
+}
+const flyGeo = new THREE.BufferGeometry();
+flyGeo.setAttribute("position", new THREE.BufferAttribute(flyPos, 3));
+flyGeo.setAttribute("seed", new THREE.BufferAttribute(flySeed, 1));
+const flyMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  uniforms: { uTime: { value: 0 }, uPx: { value: 1 } },
+  vertexShader: `
+    attribute float seed; uniform float uTime, uPx; varying float vA;
+    void main(){
+      vec3 p = position + vec3(sin(uTime * 0.6 + seed) * 0.6, sin(uTime * 0.9 + seed * 2.0) * 0.25, cos(uTime * 0.5 + seed) * 0.6);
+      vec4 mv = modelViewMatrix * vec4(p, 1.0);
+      gl_Position = projectionMatrix * mv;
+      vA = 0.35 + 0.65 * pow(0.5 + 0.5 * sin(uTime * 2.2 + seed * 5.0), 3.0);
+      gl_PointSize = uPx * 1.5;
+    }`,
+  fragmentShader: "varying float vA; void main(){ gl_FragColor = vec4(vec3(0.85, 1.0, 0.45) * vA * 1.4, vA); }",
+});
+scene.add(new THREE.Points(flyGeo, flyMat));
+
+// karakter: billboard dengan lembar sprite, bayangan kontak lembut di kaki
+const contactTex = (() => {
+  const cv = mk(32, 32), c = cv.getContext("2d");
+  const g = c.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0, "rgba(10,5,25,0.55)"); g.addColorStop(1, "rgba(10,5,25,0)");
+  c.fillStyle = g; c.fillRect(0, 0, 32, 32);
+  return new THREE.CanvasTexture(cv);
+})();
+const charGeo = billboardGeo(CW / 24, CH / 24);
+function makeActor(charKey) {
+  const tex = pix(makeSheet(CHARS[charKey]));
+  tex.repeat.set(1 / 12, 1);
+  const mesh = new THREE.Mesh(charGeo, spriteMat(tex));
+  mesh.castShadow = true;
+  const blob = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.5), new THREE.MeshBasicMaterial({ map: contactTex, transparent: true, depthWrite: false }));
+  blob.rotation.x = -Math.PI / 2;
+  scene.add(mesh, blob);
+  return { mesh, tex, blob };
+}
+const playerActor = makeActor("nino");
+for (const n of NPCS) n.actor = makeActor(n.char);
+function placeActor(a, x, z, dir, walk) {
+  const f = walk > 0 ? [0, 1, 0, 2][Math.floor(walk * 8) % 4] : 0;
+  a.tex.offset.x = (DIRS.indexOf(dir) * 3 + f) / 12;
+  a.mesh.position.set(x, 0, z);
+  a.blob.position.set(x, 0.02, z + 0.05);
 }
 
 // penanda tujuan tap
-const marker = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.42, 4), new THREE.MeshBasicMaterial({ color: "#fff27a", transparent: true, depthWrite: false }));
-marker.rotation.set(-Math.PI / 2, 0, Math.PI / 4);
+const markTex = (() => {
+  const cv = mk(16, 16), c = cv.getContext("2d");
+  R(c, "#ffe066", 1, 1, 14, 1); R(c, "#ffe066", 1, 14, 14, 1); R(c, "#ffe066", 1, 1, 1, 14); R(c, "#ffe066", 14, 1, 1, 14);
+  R(c, "#fff6c0", 1, 1, 3, 1); R(c, "#fff6c0", 1, 1, 1, 3);
+  return pix(cv);
+})();
+const marker = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: markTex, transparent: true, depthWrite: false }));
+marker.rotation.x = -Math.PI / 2;
 scene.add(marker);
 
+// ================================================================ post-processing HD-2D
+// Scene dirender ke tekstur bermipmap. Mipmap dipakai sebagai blur murah untuk tilt-shift dan bloom.
+let rt = null;
+const post = new THREE.ShaderMaterial({
+  uniforms: { tScene: { value: null }, uFocus: { value: 0.5 }, uTime: { value: 0 }, uRes: { value: new THREE.Vector2(1, 1) } },
+  vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
+  fragmentShader: `
+    uniform sampler2D tScene; uniform float uFocus, uTime; uniform vec2 uRes; varying vec2 vUv;
+    vec3 blurAt(vec2 uv, float lod){
+      vec2 o = exp2(lod) / uRes * 0.75;
+      return (textureLod(tScene, uv + vec2(o.x, o.y), lod).rgb + textureLod(tScene, uv + vec2(-o.x, o.y), lod).rgb
+            + textureLod(tScene, uv + vec2(o.x, -o.y), lod).rgb + textureLod(tScene, uv - o, lod).rgb) * 0.25;
+    }
+    vec3 aces(vec3 x){ return clamp(x * (2.51 * x + 0.03) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+    vec3 toSRGB(vec3 c){ return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
+    void main(){
+      vec2 uv = vUv;
+      vec3 sharp = textureLod(tScene, uv, 0.0).rgb;
+      float d = abs(uv.y - uFocus) - (uv.y > uFocus ? 0.18 : 0.20);
+      float amt = smoothstep(0.0, 0.35, d);
+      vec3 col = mix(sharp, blurAt(uv, amt * 2.2), smoothstep(0.0, 0.3, amt));
+      vec3 b = textureLod(tScene, uv, 3.0).rgb * 0.45 + blurAt(uv, 4.5) * 0.35 + blurAt(uv, 6.0) * 0.3;
+      col += max(b - vec3(0.5), 0.0) * vec3(1.7, 1.25, 0.9);
+      float ray = pow(max(0.0, sin((uv.x * 1.2 - uv.y * 0.8) * 10.0 + uTime * 0.12)), 10.0);
+      col += ray * smoothstep(0.55, 1.0, uv.y) * smoothstep(0.0, 0.5, uv.x) * vec3(0.05, 0.032, 0.018);
+      col = aces(col * 1.45);
+      col = toSRGB(col);
+      float l = dot(col, vec3(0.299, 0.587, 0.114));
+      col = mix(vec3(l), col, 1.12);
+      col += vec3(0.035, 0.0, 0.06) * (1.0 - col);
+      vec2 q = (uv - 0.5) * vec2(1.25, 0.95);
+      col *= 1.0 - dot(q, q) * 0.85;
+      col += (fract(sin(dot(uv * uRes + fract(uTime) * 91.0, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.025;
+      gl_FragColor = vec4(col, 1.0);
+    }`,
+  depthTest: false, depthWrite: false,
+});
+const postScene = new THREE.Scene();
+postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post));
+const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
 // ================================================================ ukuran layar
-// Area main 9:16. Dirender di resolusi rendah lalu diperbesar tajam, seperti konsol era 64-bit.
-const RETRO_W = 270;
-const view = { w: 360, h: 640 };
+// Area main selalu 9:16. Lapisan UI pixel art 180 x 320 di atasnya.
+const view = { w: 360, h: 640, left: 0, top: 0 };
 function fit() {
   const w = Math.floor(Math.min(innerWidth, innerHeight * 9 / 16)), h = Math.floor(w * 16 / 9);
   Object.assign(view, { w, h });
   const wrap = document.getElementById("wrap");
   wrap.style.width = w + "px"; wrap.style.height = h + "px";
   uiCanvas.style.width = w + "px"; uiCanvas.style.height = h + "px";
-  renderer.setPixelRatio(RETRO_W / w);
   renderer.setSize(w, h);
   camera.aspect = w / h; camera.updateProjectionMatrix();
+  const pr = renderer.getPixelRatio();
+  if (rt) rt.dispose();
+  rt = new THREE.WebGLRenderTarget(Math.floor(w * pr), Math.floor(h * pr),
+    { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true });
+  post.uniforms.uRes.value.set(w * pr, h * pr);
+  flyMat.uniforms.uPx.value = pr * Math.max(1, w / 180);   // satu piksel game
 }
 addEventListener("resize", fit);
 fit();
@@ -610,46 +1122,30 @@ function placeCamera() {
   camera.position.set(cam.x, DIST * Math.sin(PITCH), cam.z + DIST * Math.cos(PITCH));
   camera.lookAt(cam.x, 0, cam.z);
   camera.updateMatrixWorld();
-  sun.position.set(cam.x - 6, 24, cam.z + 7);
+  sun.position.set(cam.x - 14, 16, cam.z + 7);
   sun.target.position.set(cam.x, 0, cam.z - 2);
 }
 
 // ================================================================ render
-let lastT = 0;
 function render(now) {
-  const t = now / 1000, dt = Math.min(0.05, t - lastT || 0); lastT = t;
+  const t = now / 1000;
   placeCamera();
-  poseActor(playerActor, player.x / TS + 0.5, player.y / TS + 0.5, player.dir, player.walk, dt);
-  for (const n of NPCS) poseActor(n.actor, n.tx + 0.5, n.ty + 0.5, n.dir, 0, dt);
+  placeActor(playerActor, player.x / TS + 0.5, player.y / TS + 0.5, player.dir, player.walk);
+  for (const n of NPCS) placeActor(n.actor, n.tx + 0.5, n.ty + 0.5, n.dir, 0);
   marker.visible = target.x >= 0;
-  if (marker.visible) { marker.position.set(target.x + 0.5, 0.03, target.y + 0.5); marker.material.opacity = 0.5 + 0.5 * Math.sin(t * 8); }
-  const a = waterGeo.attributes.position;
-  for (let i = 0; i < a.count; i++) a.array[i * 3 + 1] = waterBase[i * 3 + 1] + Math.sin(t * 2 + waterBase[i * 3] * 2.1 + waterBase[i * 3 + 2] * 1.7) * 0.04;
-  a.needsUpdate = true; waterGeo.computeVertexNormals();
+  if (marker.visible) { marker.position.set(target.x + 0.5, 0.03, target.y + 0.5); marker.material.opacity = 0.55 + 0.45 * Math.sin(t * 8); }
+  waterMat.uniforms.uTime.value = t; flyMat.uniforms.uTime.value = t;
+  halos.forEach((hl, i) => { const s = 1.6 + Math.sin(t * 3 + i) * 0.08; hl.scale.set(s, s, 1); });
+  const fp = new THREE.Vector3(player.x / TS + 0.5, 0.6, player.y / TS + 0.5).project(camera);
+  post.uniforms.uFocus.value = fp.y * 0.5 + 0.5;
+  post.uniforms.uTime.value = t;
+  renderer.setRenderTarget(rt);
   renderer.render(scene, camera);
+  post.uniforms.tScene.value = rt.texture;
+  renderer.setRenderTarget(null);
+  renderer.render(postScene, postCam);
   ctx.clearRect(0, 0, VW, VH);
   if (dlg.npc) drawDialog(now);
-}
-
-// potret pembicara: kepala karakter dirender sekali ke kanvas kecil
-const portraits = {};
-function portrait(key) {
-  if (portraits[key]) return portraits[key];
-  const W = 28, H = 26, rt = new THREE.WebGLRenderTarget(W, H);
-  const ps = new THREE.Scene(); ps.background = new THREE.Color("#bfe6ff");
-  ps.add(new THREE.HemisphereLight("#ffffff", "#8a7a52", 2.2));
-  const dl = new THREE.DirectionalLight("#fff1d6", 1.6); dl.position.set(-1, 2, 3); ps.add(dl);
-  const a = buildChar(CHARS[key]); ps.add(a.root);
-  const pc = new THREE.PerspectiveCamera(30, W / H, 0.1, 20);
-  pc.position.set(0, 1.46, 2.6); pc.lookAt(0, 1.3, 0);
-  renderer.setRenderTarget(rt); renderer.render(ps, pc); renderer.setRenderTarget(null);
-  const buf = new Uint8Array(W * H * 4);
-  renderer.readRenderTargetPixels(rt, 0, 0, W, H, buf);
-  const cv = mk(W, H), c = cv.getContext("2d"), img = c.createImageData(W, H);
-  for (let y = 0; y < H; y++) img.data.set(buf.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4);
-  c.putImageData(img, 0, 0);
-  rt.dispose();
-  return (portraits[key] = cv);
 }
 
 function wrapText(text, maxW) {
@@ -663,38 +1159,31 @@ function wrapText(text, maxW) {
   return out;
 }
 
-// Kotak dialog: kertas krem berbingkai kayu, wajah pembicara di kiri
-// Kotak dialog: kertas krem berbingkai kayu, wajah pembicara di kiri
 function drawDialog(now) {
-  const x = 4, y = 232, w = VW - 8, h = 84;
-  R(ctx, "#4a2a18", x, y + 1, w, h - 2); R(ctx, "#4a2a18", x + 1, y, w - 2, h);
-  R(ctx, C.wood1, x + 1, y + 1, w - 2, h - 2);
-  R(ctx, C.wood2, x + 2, y + 2, w - 4, 1); R(ctx, C.wood0, x + 2, y + h - 3, w - 4, 1);
-  R(ctx, "#4a2a18", x + 4, y + 4, w - 8, h - 8);
-  R(ctx, "#fff4d8", x + 5, y + 5, w - 10, h - 10);
-  R(ctx, "#f2e2b8", x + 5, y + h - 7, w - 10, 2);
-  // potret
-  R(ctx, "#4a2a18", x + 8, y + 8, 30, 28); R(ctx, "#cfe8f8", x + 9, y + 9, 28, 26);
-  R(ctx, "#a8d8a0", x + 9, y + 28, 28, 7);
-  ctx.save(); ctx.beginPath(); ctx.rect(x + 9, y + 9, 28, 26); ctx.clip();
-  ctx.drawImage(portrait(dlg.npc.char), x + 9, y + 9);
-  ctx.restore();
-  // nama
-  const nw = textW(dlg.npc.name) + 10;
-  R(ctx, "#4a2a18", x + 8, y - 8, nw, 13);
-  R(ctx, "#f8b84a", x + 9, y - 7, nw - 2, 11); R(ctx, "#ffe09a", x + 9, y - 7, nw - 2, 1);
-  drawText(ctx, dlg.npc.name, x + 13, y - 5, "#4a2a18");
+  const x = 4, y = 234, w = VW - 8, h = 82;
+  ctx.globalAlpha = 0.94;
+  R(ctx, "#0b0d24", x, y + 1, w, h - 2); R(ctx, "#0b0d24", x + 1, y, w - 2, h);   // panel biru gradasi, bingkai bertingkat
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, "#2d3a82"); g.addColorStop(1, "#171c52");
+  ctx.fillStyle = g; ctx.fillRect(x + 2, y + 2, w - 4, h - 4);
+  ctx.globalAlpha = 1;
+  R(ctx, "#b8c2ff", x + 2, y + 2, w - 4, 1); R(ctx, "#b8c2ff", x + 2, y + 2, 1, h - 4);
+  R(ctx, "#6c78d4", x + 3, y + h - 3, w - 5, 1); R(ctx, "#6c78d4", x + w - 3, y + 3, 1, h - 5);
+  const nw = textW(dlg.npc.name) + 10;                                            // kartu nama
+  R(ctx, "#0b0d24", x + 6, y - 8, nw, 12);
+  R(ctx, "#f4cf5a", x + 7, y - 7, nw - 2, 10); R(ctx, "#fff1b0", x + 7, y - 7, nw - 2, 1);
+  drawText(ctx, dlg.npc.name, x + 12, y - 5, "#3a2a14");
   const text = dlg.npc.lines[dlg.line];
   let start = 0;
-  wrapText(text, w - 56).forEach((ln, i) => {
+  wrapText(text, w - 18).forEach((ln, i) => {
     const part = ln.slice(0, Math.max(0, Math.floor(dlg.shown) - start));
-    drawText(ctx, part, x + 44, y + 10 + i * 10, "#4a2a18");
+    drawText(ctx, part, x + 9, y + 10 + i * 10, "#f4f4ff", "#0b0d24");
     start += ln.length + 1;
   });
   if (dlg.shown >= text.length && Math.floor(now / 400) % 2 === 0) {
-    const ax = x + w - 15, ay = y + h - 14;
-    R(ctx, "#d86a2a", ax, ay, 7, 1); R(ctx, "#d86a2a", ax + 1, ay + 1, 5, 1);
-    R(ctx, "#d86a2a", ax + 2, ay + 2, 3, 1); R(ctx, "#d86a2a", ax + 3, ay + 3, 1, 1);
+    const ax = x + w - 14, ay = y + h - 11;
+    R(ctx, "#f4cf5a", ax, ay, 7, 1); R(ctx, "#f4cf5a", ax + 1, ay + 1, 5, 1);
+    R(ctx, "#f4cf5a", ax + 2, ay + 2, 3, 1); R(ctx, "#f4cf5a", ax + 3, ay + 3, 1, 1);
   }
 }
 
@@ -709,9 +1198,9 @@ glCanvas.addEventListener("pointerdown", (e) => {
   const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   placeCamera();
   ray.setFromCamera(ndc, camera);
-  const hit = ray.intersectObjects(NPCS.map((n) => n.actor.root), true)[0];
+  const hitNpc = ray.intersectObjects(NPCS.map((n) => n.actor.mesh))[0];
   let tx, ty;
-  if (hit) { const n = NPCS.find((q) => { let o = hit.object; while (o) { if (o === q.actor.root) return true; o = o.parent; } return false; }); tx = n.tx; ty = n.ty; }
+  if (hitNpc) { const n = NPCS.find((q) => q.actor.mesh === hitNpc.object); tx = n.tx; ty = n.ty; }
   else {
     const p = ray.ray.intersectPlane(groundPlane, new THREE.Vector3());
     if (!p) return;
@@ -757,7 +1246,7 @@ function tileToScreen(tx, ty) {
   const r = glCanvas.getBoundingClientRect();
   return { x: r.left + (p.x * 0.5 + 0.5) * r.width, y: r.top + (-p.y * 0.5 + 0.5) * r.height, left: r.left, top: r.top, w: r.width, h: r.height };
 }
-window.__recursio = { VW, VH, TS, MW, MH, map, player, cam, target, dlg, NPCS, CHARS, CAM_BOUNDS, tileToScreen, scene, camera, buildChar };
+window.__recursio = { VW, VH, TS, MW, MH, map, player, cam, target, dlg, NPCS, CHARS, CAM_BOUNDS, tileToScreen, makeSheet };
 </script>
 </body>
 </html>
