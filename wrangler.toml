@@ -1,0 +1,9 @@
+name = "recursio"
+compatibility_date = "2026-08-01"
+
+[assets]
+directory = "."
+
+[[routes]]
+pattern = "games.qilo.one"
+custom_domain = true
