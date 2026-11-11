@@ -8,14 +8,16 @@ import { GLTFLoader } from "./lib/GLTFLoader.js";
 // tint: warna pengali untuk bahan yang namanya mengandung kata kunci
 // grey: bahan yang teksturnya diubah menjadi abu-abu terang (rambut beruban)
 // morph: nomor target morf wajah dari file VRM asli (data VRM hilang saat file diperkecil)
-// face: ekspresi tetap (nama morf: bobot); old: kerutan, kacamata, dan sanggul
+// face: ekspresi tetap (nama morf: bobot); glasses: kacamata bulat; bun: sanggul (y tinggi dari mata, size, warna)
 const M10 = { blink: 10, eyeJoy: 13, mthFun: 29, brwSorrow: 6 }, M12 = { blink: 12, eyeJoy: 15, mthFun: 25, brwSorrow: 8 };
 const CHARS = {
   nino: { name: "Nino", height: 1.6, tint: { Tops: "#ff8f2e" }, morph: M10 },
   kael: { name: "Kael", height: 1.66, morph: M10 },
-  ibu: { name: "Ibu Nino", height: 1.58, morph: M12 },
+  ibu: { name: "Ibu Nino", height: 1.6, morph: M12, tint: { Tops: "#d6c2ae", Shoes: "#8a6a58", EyeIris: "#a07c5c" },
+    face: { eyeJoy: 0.2, mthFun: 0.3 } },
   nenek: { name: "Nenek Kael", height: 1.46, grey: ["Hair", "FaceBrow"], hunch: 0.2, morph: M12, tint: { Tops: "#c8aa94" },
-    face: { eyeJoy: 1, mthFun: 0.5, brwSorrow: 0.35 }, old: true },
+    face: { eyeJoy: 1, mthFun: 0.5, brwSorrow: 0.35 }, glasses: true,
+    bun: { y: 1.15, size: 0.5, base: "#cfd1da", light: "rgba(255,255,255,0.35)", dark: "rgba(120,124,140,0.3)", pin: true } },
 };
 export const CHAR_KEYS = Object.keys(CHARS);
 export const charName = (key) => CHARS[key].name;
@@ -37,9 +39,9 @@ function greyTex(map) {
   return t;
 }
 
-// Ciri nenek: kacamata bulat dan sanggul ditempel ke tulang kepala (mata tersenyum dan rambut putih diatur di CHARS).
+// Aksesori kepala: kacamata bulat dan sanggul ditempel ke tulang kepala.
 // Letak diukur dari kotak mesh wajah: x dalam setengah lebar wajah (sx) dari tengah, y dalam jarak mata ke dagu (h).
-function makeOld(model, B) {
+function addHeadExtras(model, B, o) {
   let skin = null, ey = 0, ne = 0;
   const hairs = [];
   model.traverse((n) => {
@@ -65,6 +67,7 @@ function makeOld(model, B) {
   };
   // kacamata bulat di depan mata
   const frame = new THREE.MeshStandardMaterial({ color: "#7a5236", roughness: 0.4, metalness: 0.3 });
+  if (o.glasses) {
   const glasses = new THREE.Group(), R = 0.32 * sx, fz = Math.max(at(-0.47, 0).z, at(0.47, 0).z, at(0, -0.3).z) + 0.012;
   for (const s of [-1, 1]) {
     const ring = new THREE.Mesh(new THREE.TorusGeometry(R, 0.022 * sx, 8, 32), frame);
@@ -75,9 +78,11 @@ function makeOld(model, B) {
   const bridge = new THREE.Mesh(new THREE.CylinderGeometry(0.02 * sx, 0.02 * sx, 0.94 * sx - 2 * R, 8), frame);
   bridge.rotation.z = Math.PI / 2; bridge.position.set(cx, ey + 0.05 * h, fz); glasses.add(bridge);
   B.C_Head.attach(glasses);                     // tanpa induk: posisi dunia dipakai langsung saat ditempel
+  }
+  if (!o.bun) return;
 
-  // sanggul: menempel di permukaan rambut belakang, setinggi ubun-ubun bagian belakang
-  const by = ey + 1.15 * h;
+  // sanggul: menempel di permukaan rambut belakang pada ketinggian o.bun.y (kelipatan jarak mata ke dagu)
+  const ob = o.bun, by = ey + ob.y * h;
   let back = box.min.z;
   for (const m of hairs) {
     const pos = m.geometry.attributes.position;
@@ -86,11 +91,11 @@ function makeOld(model, B) {
       if (Math.abs(v.x - cx) < 0.3 * sx && Math.abs(v.y - by) < 0.25 * h && v.z < back) back = v.z;
     }
   }
-  const r = 0.5 * sx, cv = document.createElement("canvas");                // tekstur helai rambut perak
+  const r = ob.size * sx, cv = document.createElement("canvas");                // tekstur helai rambut perak
   cv.width = 128; cv.height = 64;
   const c = cv.getContext("2d");
-  c.fillStyle = "#cfd1da"; c.fillRect(0, 0, 128, 64);
-  for (let i = 0; i < 90; i++) { c.fillStyle = i % 2 ? "rgba(255,255,255,0.35)" : "rgba(120,124,140,0.3)"; c.fillRect(Math.random() * 128, 0, 1 + Math.random() * 2, 64); }
+  c.fillStyle = ob.base; c.fillRect(0, 0, 128, 64);
+  for (let i = 0; i < 90; i++) { c.fillStyle = i % 2 ? ob.light : ob.dark; c.fillRect(Math.random() * 128, 0, 1 + Math.random() * 2, 64); }
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = THREE.RepeatWrapping; tex.repeat.x = 2;
   const silver = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 });
   const bun = new THREE.Group();
@@ -99,7 +104,7 @@ function makeOld(model, B) {
   const wrap = new THREE.Mesh(new THREE.TorusGeometry(r * 0.78, r * 0.2, 10, 24), silver);   // lilitan rambut di pangkal sanggul
   wrap.position.z = r * 0.45; bun.add(wrap);
   const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.03 * r, 0.03 * r, 3 * r, 8), new THREE.MeshStandardMaterial({ color: "#c9a040", roughness: 0.35, metalness: 0.6 }));
-  pin.rotation.z = 1.2; bun.add(pin);                                         // tusuk konde
+  pin.rotation.z = 1.2; if (ob.pin) bun.add(pin);                                         // tusuk konde
   bun.position.set(cx, by - 0.3 * r, back + 0.65 * r);           // sedikit tertanam di rambut supaya tidak mengambang
   B.C_Head.attach(bun);
 }
@@ -133,7 +138,7 @@ export async function loadChar(key) {
       w[mo.blink] = closed ? 1 : 0;
     }
   };
-  if (o.old) { root.updateMatrixWorld(true); makeOld(model, B); }
+  if (o.glasses || o.bun) { root.updateMatrixWorld(true); addHeadExtras(model, B, o); }
 
   for (const k of ["L_UpperArm", "R_UpperArm"]) B[k].rotation.order = "XZY";   // turunkan lengan dulu, lalu ayun
   const hipY = B.C_Hips.position.y, hunch = o.hunch || 0;
