@@ -7,11 +7,15 @@ import { GLTFLoader } from "./lib/GLTFLoader.js";
 
 // tint: warna pengali untuk bahan yang namanya mengandung kata kunci
 // grey: bahan yang teksturnya diubah menjadi abu-abu terang (rambut beruban)
+// morph: nomor target morf wajah dari file VRM asli (data VRM hilang saat file diperkecil)
+// face: ekspresi tetap (nama morf: bobot); old: kerutan, kacamata, dan sanggul
+const M10 = { blink: 10, eyeJoy: 13, mthFun: 29, brwSorrow: 6 }, M12 = { blink: 12, eyeJoy: 15, mthFun: 25, brwSorrow: 8 };
 const CHARS = {
-  nino: { name: "Nino", height: 1.6, tint: { Tops: "#ff8f2e" } },
-  kael: { name: "Kael", height: 1.66 },
-  ibu: { name: "Ibu Nino", height: 1.58 },
-  nenek: { name: "Nenek Kael", height: 1.46, grey: ["Hair", "FaceBrow"], hunch: 0.2 },
+  nino: { name: "Nino", height: 1.6, tint: { Tops: "#ff8f2e" }, morph: M10 },
+  kael: { name: "Kael", height: 1.66, morph: M10 },
+  ibu: { name: "Ibu Nino", height: 1.58, morph: M12 },
+  nenek: { name: "Nenek Kael", height: 1.46, grey: ["Hair", "FaceBrow"], hunch: 0.2, morph: M12, tint: { Tops: "#c8aa94" },
+    face: { eyeJoy: 1, mthFun: 0.5, brwSorrow: 0.35 }, old: true },
 };
 export const CHAR_KEYS = Object.keys(CHARS);
 export const charName = (key) => CHARS[key].name;
@@ -24,13 +28,80 @@ function greyTex(map) {
   const c = cv.getContext("2d"); c.drawImage(img, 0, 0);
   const d = c.getImageData(0, 0, cv.width, cv.height), p = d.data;
   for (let i = 0; i < p.length; i += 4) {
-    const l = (0.3 * p[i] + 0.59 * p[i + 1] + 0.11 * p[i + 2]) / 255, v = 150 + 100 * Math.min(1, l * 1.6);
+    const l = (0.3 * p[i] + 0.59 * p[i + 1] + 0.11 * p[i + 2]) / 255, v = 110 + 120 * Math.min(1, l * 1.5);
     p[i] = v * 0.97; p[i + 1] = v * 0.97; p[i + 2] = v;
   }
   c.putImageData(d, 0, 0);
   const t = new THREE.CanvasTexture(cv);
   t.flipY = map.flipY; t.colorSpace = map.colorSpace; t.wrapS = map.wrapS; t.wrapT = map.wrapT; t.channel = map.channel;
   return t;
+}
+
+// Ciri nenek: kacamata bulat dan sanggul ditempel ke tulang kepala (mata tersenyum dan rambut putih diatur di CHARS).
+// Letak diukur dari kotak mesh wajah: x dalam setengah lebar wajah (sx) dari tengah, y dalam jarak mata ke dagu (h).
+function makeOld(model, B) {
+  let skin = null, ey = 0, ne = 0;
+  const hairs = [];
+  model.traverse((n) => {
+    if (/^J_Adj_[LR]_FaceEye$/.test(n.name)) { ey += n.getWorldPosition(new THREE.Vector3()).y; ne++; }
+    if (!n.isMesh) return;
+    if (n.material.name.includes("Face_00_SKIN")) skin = n;
+    if (n.material.name.includes("_HAIR")) hairs.push(n);
+  });
+  ey /= ne;
+  const P = [], uv = skin.geometry.attributes.uv, v = new THREE.Vector3(), box = new THREE.Box3();
+  for (let i = 0; i < uv.count; i++) {
+    skin.getVertexPosition(i, v).applyMatrix4(skin.matrixWorld);
+    P.push([v.x, v.y, v.z, uv.getX(i), uv.getY(i)]); box.expandByPoint(v);
+  }
+  const cx = (box.min.x + box.max.x) / 2, sx = (box.max.x - box.min.x) / 2, h = ey - box.min.y, zc = (box.min.z + box.max.z) / 2;
+  const front = P.filter((p) => p[2] > zc);
+  const at = (fx, fy) => {                                                    // z permukaan wajah di titik (fx, fy)
+    const x = cx + fx * sx, y = ey + fy * h;
+    const near = front.map((p) => [Math.hypot(p[0] - x, p[1] - y), p]).sort((a, b) => a[0] - b[0]).slice(0, 4);
+    let w = 0, u = 0, t = 0, z = 0;
+    for (const [dd, p] of near) { const k = 1 / (dd + 1e-4); w += k; u += k * p[3]; t += k * p[4]; z += k * p[2]; }
+    return { u: u / w, v: t / w, z: z / w, x, y };
+  };
+  // kacamata bulat di depan mata
+  const frame = new THREE.MeshStandardMaterial({ color: "#7a5236", roughness: 0.4, metalness: 0.3 });
+  const glasses = new THREE.Group(), R = 0.32 * sx, fz = Math.max(at(-0.47, 0).z, at(0.47, 0).z, at(0, -0.3).z) + 0.012;
+  for (const s of [-1, 1]) {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(R, 0.022 * sx, 8, 32), frame);
+    ring.position.set(cx + s * 0.47 * sx, ey - 0.03 * h, fz); glasses.add(ring);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.03 * sx, 0.03 * sx, 0.9 * sx), frame);
+    arm.position.set(cx + s * (0.47 * sx + R), ey - 0.03 * h, fz - 0.45 * sx); glasses.add(arm);
+  }
+  const bridge = new THREE.Mesh(new THREE.CylinderGeometry(0.02 * sx, 0.02 * sx, 0.94 * sx - 2 * R, 8), frame);
+  bridge.rotation.z = Math.PI / 2; bridge.position.set(cx, ey + 0.05 * h, fz); glasses.add(bridge);
+  B.C_Head.attach(glasses);                     // tanpa induk: posisi dunia dipakai langsung saat ditempel
+
+  // sanggul: menempel di permukaan rambut belakang, setinggi ubun-ubun bagian belakang
+  const by = ey + 1.15 * h;
+  let back = box.min.z;
+  for (const m of hairs) {
+    const pos = m.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      m.getVertexPosition(i, v).applyMatrix4(m.matrixWorld);
+      if (Math.abs(v.x - cx) < 0.3 * sx && Math.abs(v.y - by) < 0.25 * h && v.z < back) back = v.z;
+    }
+  }
+  const r = 0.5 * sx, cv = document.createElement("canvas");                // tekstur helai rambut perak
+  cv.width = 128; cv.height = 64;
+  const c = cv.getContext("2d");
+  c.fillStyle = "#cfd1da"; c.fillRect(0, 0, 128, 64);
+  for (let i = 0; i < 90; i++) { c.fillStyle = i % 2 ? "rgba(255,255,255,0.35)" : "rgba(120,124,140,0.3)"; c.fillRect(Math.random() * 128, 0, 1 + Math.random() * 2, 64); }
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = THREE.RepeatWrapping; tex.repeat.x = 2;
+  const silver = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 });
+  const bun = new THREE.Group();
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), silver);
+  ball.scale.set(1.1, 0.95, 0.85); ball.castShadow = true; bun.add(ball);
+  const wrap = new THREE.Mesh(new THREE.TorusGeometry(r * 0.78, r * 0.2, 10, 24), silver);   // lilitan rambut di pangkal sanggul
+  wrap.position.z = r * 0.45; bun.add(wrap);
+  const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.03 * r, 0.03 * r, 3 * r, 8), new THREE.MeshStandardMaterial({ color: "#c9a040", roughness: 0.35, metalness: 0.6 }));
+  pin.rotation.z = 1.2; bun.add(pin);                                         // tusuk konde
+  bun.position.set(cx, by - 0.3 * r, back + 0.65 * r);           // sedikit tertanam di rambut supaya tidak mengambang
+  B.C_Head.attach(bun);
 }
 
 export async function loadChar(key) {
@@ -52,13 +123,17 @@ export async function loadChar(key) {
   pivot.scale.setScalar(s); pivot.position.y = -box.min.y * s;
   pivot.add(model); root.add(pivot);
 
-  // kedip: cari target morf "Blink" dari data VRM
-  let blinkIdx = -1;
-  const groups = gltf.parser.json.extensions?.VRM?.blendShapeMaster?.blendShapeGroups || [];
-  const bg = groups.find((g) => (g.presetName || "").toLowerCase() === "blink");
-  if (bg && bg.binds?.[0]) blinkIdx = bg.binds[0].index;
-  const faces = [];
-  model.traverse((n) => { if (n.isMesh && n.morphTargetInfluences && blinkIdx >= 0 && blinkIdx < n.morphTargetInfluences.length) faces.push(n); });
+  // wajah: semua potongan mesh yang punya target morf
+  const faces = [], mo = o.morph;
+  model.traverse((n) => { if (n.isMesh && n.morphTargetInfluences && n.morphTargetInfluences.length > mo.blink) faces.push(n); });
+  const setFace = (closed) => {
+    for (const f of faces) {
+      const w = f.morphTargetInfluences;
+      for (const k in o.face || {}) w[mo[k]] = o.face[k] * (k === "eyeJoy" && closed ? 0 : 1);
+      w[mo.blink] = closed ? 1 : 0;
+    }
+  };
+  if (o.old) { root.updateMatrixWorld(true); makeOld(model, B); }
 
   for (const k of ["L_UpperArm", "R_UpperArm"]) B[k].rotation.order = "XZY";   // turunkan lengan dulu, lalu ayun
   const hipY = B.C_Hips.position.y, hunch = o.hunch || 0;
@@ -87,7 +162,7 @@ export async function loadChar(key) {
     B.C_Head.rotation.y = -B.C_Hips.rotation.y;
     st.blink -= dt;
     const closed = st.blink < 0.12 ? 1 : 0;
-    for (const f of faces) f.morphTargetInfluences[blinkIdx] = closed;
+    setFace(closed);
     if (st.blink < 0) st.blink = 2.2 + Math.random() * 3;
   }
   update(0);
