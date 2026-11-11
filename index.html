@@ -429,22 +429,23 @@ function face(p, o, xs, hy, side) {
 
 function composeChar(o, dir, frame) {
   const p = new Pix(CW, CH);
-  const bob = frame ? 1 : 0, side = dir === "left", back = dir === "up";
-  const st = frame === 0 ? 0 : frame === 1 ? 1 : -1;
+  // frame: 0 diam, 1 langkah A, 2 lewat, 3 langkah B, 4 lewat. Badan naik 1 piksel saat pose lewat.
+  const bob = frame === 2 || frame === 4 ? 1 : 0, side = dir === "left", back = dir === "up";
+  const st = frame === 1 ? 1 : frame === 3 ? -1 : 0;
   const S = o.skin, T = o.top, Pn = o.pants, Sh = o.shoe;
   // kaki atau kain panjang
   if (o.skirt) {
     const hem = 44 - bob;
     p.shape(o.skirt, side ? poly([[12, 31 - bob], [21, 31 - bob], [22.5, hem], [10, hem]]) : poly([[11, 31 - bob], [21, 31 - bob], [23.5, hem], [8.5, hem]]), 1);
     if (o.skirtFx) o.skirtFx(p, dir, bob);
-    const feet = side ? [[15 + st * 2, frame === 1 ? 1 : 0]] : [[13, frame === 2 ? 1 : 0], [19, frame === 1 ? 1 : 0]];
+    const feet = side ? [[15 + st * 2, bob]] : [[13, frame === 3 ? 1 : 0], [19, frame === 1 ? 1 : 0]];
     for (const [x, lift] of feet) { p.rect(S[2], x - 1, hem, 2, 2 - lift); p.shape(Sh, ell(x + (side ? -0.8 : 0), 46 - lift, 2.6, 1.4)); }
   } else {
-    const legs = side ? [[16 - st * 3, frame === 1 ? 2 : 0, true], [16 + st * 3, frame === 2 ? 2 : 0, false]]
-                      : [[13.4, frame === 2 ? 2 : 0, false], [18.6, frame === 1 ? 2 : 0, false]];
+    const legs = side ? [[16 - st * 3 + (frame === 2 ? 1 : 0), frame === 2 ? 2 : 0, true], [16 + st * 3 - (frame === 4 ? 1 : 0), frame === 4 ? 2 : 0, false]]
+                      : [[13.4, frame === 3 ? 2 : 0, false], [18.6, frame === 1 ? 2 : 0, false]];
     for (const [x, lift, behind] of legs) {
-      p.shape(behind ? [Pn[2], Pn[0], Pn[2]] : Pn, rrect(x - 2.3, 31 - bob, 4.6, 13 - lift, 1.5), 1);
-      if (o.cuff) p.rect(o.cuff, Math.round(x - 2), 42 - lift - bob, 4, 1);
+      p.shape(behind ? [Pn[2], Pn[0], Pn[2]] : Pn, rrect(x - 2.3, 31 - bob, 4.6, 13 - lift + bob, 1.5), 1);
+      if (o.cuff) p.rect(o.cuff, Math.round(x - 2), 42 - lift, 4, 1);
       p.shape(behind ? [Sh[2], Sh[0], Sh[2]] : Sh, ell(x + (side ? -1 : 0), 45.2 - lift, side ? 3.4 : 2.8, 1.9), 1);
       if (o.sole) p.rect(o.sole, Math.round(x - 2.6 + (side ? -1 : 0)), 46 - lift, 5, 1);
     }
@@ -593,16 +594,16 @@ const CHARS = {
   },
 };
 
-// Satu lembar 384 x 48: arah bawah, atas, kiri, kanan, masing-masing 3 frame
+// Satu lembar 640 x 48: arah bawah, atas, kiri, kanan, masing-masing 5 frame
 const DIRS = ["down", "up", "left", "right"];
 function makeSheet(o) {
-  const cv = mk(CW * 12, CH), c = cv.getContext("2d");
-  for (let f = 0; f < 3; f++) {
+  const cv = mk(CW * 20, CH), c = cv.getContext("2d");
+  for (let f = 0; f < 5; f++) {
     c.drawImage(composeChar(o, "down", f), f * CW, 0);
-    c.drawImage(composeChar(o, "up", f), (3 + f) * CW, 0);
+    c.drawImage(composeChar(o, "up", f), (5 + f) * CW, 0);
     const l = composeChar(o, "left", f);
-    c.drawImage(l, (6 + f) * CW, 0);
-    c.save(); c.translate((9 + f) * CW + CW, 0); c.scale(-1, 1); c.drawImage(l, 0, 0); c.restore();
+    c.drawImage(l, (10 + f) * CW, 0);
+    c.save(); c.translate((15 + f) * CW + CW, 0); c.scale(-1, 1); c.drawImage(l, 0, 0); c.restore();
   }
   return cv;
 }
@@ -667,8 +668,38 @@ function findPath(sx, sy, ex, ey) {
   }
   if (!prev.has(key(ex, ey))) return null;
   const path = [];
-  for (let c = [ex, ey]; key(c[0], c[1]) !== key(sx, sy); c = prev.get(key(c[0], c[1]))) path.push(c);
-  return path.reverse();
+  for (let c = [ex, ey]; c; c = prev.get(key(c[0], c[1]))) path.push([c[0] * TS, c[1] * TS]);
+  return smooth(path.reverse());
+}
+
+// Garis bebas hambatan: badan Nino (setengah lebar 5 piksel) tidak menyentuh tile terhalang di sepanjang garis
+function clearLine(ax, ay, bx, by) {
+  const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / 3));
+  for (let i = 0; i <= n; i++) {
+    const x = ax + (bx - ax) * i / n + 8, y = ay + (by - ay) * i / n + 8;
+    for (const [ox, oy] of [[-5, -5], [5, -5], [-5, 5], [5, 5]])
+      if (!walkable(Math.floor((x + ox) / TS), Math.floor((y + oy) / TS))) return false;
+  }
+  return true;
+}
+// Buang titik belok yang tidak perlu, supaya Nino berjalan lurus ke tujuan dan hanya berbelok di penghalang
+function smooth(pts) {
+  const out = [];
+  let cx = player.x, cy = player.y, i = 0;
+  while (i < pts.length) {
+    let j = pts.length - 1;
+    while (j > i && !clearLine(cx, cy, pts[j][0], pts[j][1])) j--;
+    out.push(pts[j]); [cx, cy] = pts[j]; i = j + 1;
+  }
+  return out;
+}
+const pathLen = (pts) => pts.reduce((acc, q, i) => acc + Math.hypot(q[0] - (i ? pts[i - 1][0] : player.x), q[1] - (i ? pts[i - 1][1] : player.y)), 0);
+// Arah hadap mengikuti arah gerak. Di sekitar diagonal arah lama dipertahankan agar tidak berkedip.
+function faceTo(dx, dy) {
+  const horiz = dx < 0 ? "left" : "right", vert = dy < 0 ? "up" : "down";
+  if (Math.abs(dx) > Math.abs(dy) * 1.3) player.dir = horiz;
+  else if (Math.abs(dy) > Math.abs(dx) * 1.3) player.dir = vert;
+  else if (player.dir !== horiz && player.dir !== vert) player.dir = vert;
 }
 
 function update(dt) {
@@ -677,27 +708,27 @@ function update(dt) {
     player.walk = 0;
     return;
   }
-  let move = SPEED * dt;
+  // sisa jarak dipakai untuk melambat saat hampir tiba, moveT untuk percepatan saat mulai
+  let rem = 0, px = player.x, py = player.y;
+  for (const [x, y] of player.path) { rem += Math.hypot(x - px, y - py); px = x; py = y; }
+  player.moveT = rem > 0 ? (player.moveT || 0) + dt : 0;
+  let move = SPEED * dt * Math.min(1, 0.35 + player.moveT / 0.18) * Math.min(1, 0.45 + rem / 10);
   let moved = false;
-  while (move > 0) {
-    const gx = player.tx * TS, gy = player.ty * TS;
-    if (player.x === gx && player.y === gy) {
-      const next = player.path.shift();
-      if (!next) { target.x = -1; break; }
-      player.dir = dirTo(next[0] - player.tx, next[1] - player.ty);
-      player.tx = next[0]; player.ty = next[1];
-      continue;
-    }
-    const dx = gx - player.x, dy = gy - player.y;
-    const dist = Math.abs(dx) + Math.abs(dy);
+  while (move > 0 && player.path.length) {
+    const [gx, gy] = player.path[0];
+    const dx = gx - player.x, dy = gy - player.y, dist = Math.hypot(dx, dy);
+    if (dist < 1e-6) { player.path.shift(); continue; }
+    faceTo(dx, dy);
     moved = true;
     if (move >= dist) {
-      player.x = gx; player.y = gy; move -= dist;
+      player.x = gx; player.y = gy; move -= dist; player.walk += dist; player.path.shift();
     } else {
-      player.x += Math.sign(dx) * move; player.y += Math.sign(dy) * move; move = 0;
+      player.x += dx / dist * move; player.y += dy / dist * move; player.walk += move; move = 0;
     }
   }
-  player.walk = moved ? player.walk + dt : 0;
+  player.tx = Math.round(player.x / TS); player.ty = Math.round(player.y / TS);
+  if (!player.path.length) target.x = -1;
+  if (!moved) player.walk = 0;                       // walk: jarak tempuh dalam piksel, menggerakkan siklus langkah
   if (pending && atRest()) { if (adjacent(pending)) openDialog(pending); else pending = null; }
 }
 
@@ -1028,7 +1059,7 @@ const contactTex = (() => {
 const charGeo = billboardGeo(CW / 24, CH / 24);
 function makeActor(charKey) {
   const tex = pix(makeSheet(CHARS[charKey]));
-  tex.repeat.set(1 / 12, 1);
+  tex.repeat.set(1 / 20, 1);
   const mesh = new THREE.Mesh(charGeo, spriteMat(tex));
   mesh.castShadow = true;
   const blob = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.5), new THREE.MeshBasicMaterial({ map: contactTex, transparent: true, depthWrite: false }));
@@ -1039,8 +1070,8 @@ function makeActor(charKey) {
 const playerActor = makeActor("nino");
 for (const n of NPCS) n.actor = makeActor(n.char);
 function placeActor(a, x, z, dir, walk) {
-  const f = walk > 0 ? [0, 1, 0, 2][Math.floor(walk * 8) % 4] : 0;
-  a.tex.offset.x = (DIRS.indexOf(dir) * 3 + f) / 12;
+  const f = walk > 0 ? 1 + Math.floor(walk / 5.5) % 4 : 0;   // satu pose tiap 5,5 piksel agar kaki tidak meluncur
+  a.tex.offset.x = (DIRS.indexOf(dir) * 5 + f) / 20;
   a.mesh.position.set(x, 0, z);
   a.blob.position.set(x, 0.02, z + 0.05);
 }
@@ -1212,11 +1243,11 @@ glCanvas.addEventListener("pointerdown", (e) => {
     const spots = [[1, 0], [-1, 0], [0, 1], [0, -1]]
       .map(([dx, dy]) => findPath(player.tx, player.ty, tx + dx, ty + dy))
       .filter(Boolean)
-      .sort((a, b) => a.length - b.length);
+      .sort((a, b) => pathLen(a) - pathLen(b));
     if (!spots.length) return;
     player.path = spots[0]; pending = npc;
     const end = spots[0][spots[0].length - 1];
-    target.x = end[0]; target.y = end[1];
+    target.x = end[0] / TS; target.y = end[1] / TS;
     return;
   }
   const path = findPath(player.tx, player.ty, tx, ty);
