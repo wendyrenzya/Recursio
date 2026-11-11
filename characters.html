@@ -6,7 +6,7 @@
 <title>Recursio | Karakter</title>
 <link rel="icon" href="data:,">
 <style>
-  html, body { margin: 0; height: 100%; background: #241c36; overflow: hidden; font-family: system-ui, sans-serif; }
+  html, body { margin: 0; height: 100%; background: #3f6672; overflow: hidden; font-family: system-ui, sans-serif; }
   canvas { display: block; touch-action: none; }
   .tag { position: absolute; transform: translate(-50%, 0); color: #fff4d8; font-size: 13px; font-weight: 600;
          background: rgba(20, 14, 34, 0.7); padding: 3px 10px; border-radius: 4px; pointer-events: none; white-space: nowrap; }
@@ -29,28 +29,28 @@ renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadow
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color("#2a2140");
-scene.fog = new THREE.Fog("#2a2140", 12, 24);
+scene.background = new THREE.Color("#3f6672");
+scene.fog = new THREE.Fog("#3f6672", 13, 26);
 const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 60);
 
-scene.add(new THREE.HemisphereLight("#cdd6ff", "#6a5040", 1.5));
-const key = new THREE.DirectionalLight("#ffd9a8", 2.6);
+scene.add(new THREE.HemisphereLight("#e8f2ff", "#5a6a66", 1.7));
+const key = new THREE.DirectionalLight("#fff0dc", 2.4);
 key.position.set(-3, 6, 4); key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
 Object.assign(key.shadow.camera, { left: -4, right: 4, top: 5, bottom: -3, near: 0.5, far: 20 });
 key.shadow.bias = -0.0005; key.shadow.normalBias = 0.02;
 scene.add(key);
 const rim = new THREE.DirectionalLight("#8aa0ff", 1.2); rim.position.set(3, 3, -4); scene.add(rim);
 
-const floor = new THREE.Mesh(new THREE.CircleGeometry(12, 48), new THREE.MeshStandardMaterial({ color: "#3a3056", roughness: 1 }));
+const floor = new THREE.Mesh(new THREE.CircleGeometry(12, 48), new THREE.MeshStandardMaterial({ color: "#3d6570", roughness: 1 }));
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 
 // empat karakter di alas bundar, susunan 2 x 2 agar pas di layar HP tegak
-const SPOTS = [[-0.8, 1.5], [0.8, 1.5], [-0.8, -1.7], [0.8, -1.7]];
+const SPOTS = [[-0.8, 1.6], [0.8, 1.6], [-0.8, -1.9], [0.8, -1.9]];
 const actors = CHAR_KEYS.map((k, i) => {
   const a = buildChar(k);
   a.root.position.set(SPOTS[i][0], 0.08, SPOTS[i][1]);
   scene.add(a.root);
-  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.64, 0.08, 40), new THREE.MeshStandardMaterial({ color: "#5a4c80", roughness: 0.9 }));
+  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.64, 0.08, 40), new THREE.MeshStandardMaterial({ color: "#4a7884", roughness: 0.9 }));
   plinth.position.set(SPOTS[i][0], 0.04, SPOTS[i][1]); plinth.receiveShadow = true; plinth.castShadow = true; scene.add(plinth);
   const tag = document.createElement("div"); tag.className = "tag"; tag.textContent = charName(k); document.body.appendChild(tag);
   return { ...a, tag };
@@ -69,7 +69,7 @@ function fit() {
 }
 addEventListener("resize", fit); fit();
 
-const view = { pos: [0, 7.4, 9.4], look: [0, 0.55, -0.15] };
+const view = { pos: [0, 8.2, 10.4], look: [0, 0.75, -0.2] };
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
