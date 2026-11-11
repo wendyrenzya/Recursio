@@ -6,9 +6,23 @@
 import * as THREE from "./lib/three.module.min.js";
 
 const mats = {};
+// warna polos diberi gradasi lukis: sedikit terang di atas, lebih gelap dan keunguan di bawah (v = bawah ke atas)
+function gradTex(color, sh = "#4a2f66", k = 0.3) {
+  const cv = document.createElement("canvas"); cv.width = 4; cv.height = 64;
+  const c = cv.getContext("2d"), g = c.createLinearGradient(0, 0, 0, 64), base = new THREE.Color(color);
+  g.addColorStop(0, "#" + base.clone().lerp(new THREE.Color("#ffffff"), 0.08).getHexString());
+  g.addColorStop(0.55, "#" + base.getHexString());
+  g.addColorStop(1, "#" + base.clone().lerp(new THREE.Color(sh), k).getHexString());
+  c.fillStyle = g; c.fillRect(0, 0, 4, 64);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
 const mat = (color, o = {}) => {
   const k = color + JSON.stringify(o);
-  return (mats[k] ||= new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, ...o }));
+  if (mats[k]) return mats[k];
+  const { flat, sh, ...rest } = o;
+  return (mats[k] = flat ? new THREE.MeshStandardMaterial({ color, roughness: 0.9, ...rest })
+    : new THREE.MeshStandardMaterial({ map: gradTex(color, sh, sh ? 0.14 : 0.3), roughness: 1, ...rest }));
 };
 function add(parent, geo, material, pos = [0, 0, 0], rot = [0, 0, 0], scale = [1, 1, 1]) {
   const m = new THREE.Mesh(geo, typeof material === "string" ? mat(material) : material);
@@ -88,7 +102,7 @@ function shoeGeo() {
   const g = ball(1, 20, 14), p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const z = p.getZ(i), y = Math.max(p.getY(i), -0.75);
-    p.setXYZ(i, p.getX(i) * 0.072 * (1 + 0.12 * z), y * 0.06 * (z < 0 ? 1 : 1 - 0.25 * z), z * 0.108);   // tumit membulat, ujung melandai
+    p.setXYZ(i, p.getX(i) * 0.064 * (1 + 0.12 * z), y * 0.056 * (z < 0 ? 1 : 1 - 0.3 * z), z * 0.098);   // tumit membulat, ujung melandai
   }
   g.computeVertexNormals();
   return g;
@@ -102,8 +116,8 @@ function buildLeg(hips, side, o) {
   add(knee, loft([[0.02, 0.08 * t, 0.084 * t], [-0.07, 0.082 * t, 0.086 * t], [-0.115, 0.076 * t, 0.08 * t]]), m);
   if (o.cuff) add(knee, loft([[-0.085, 0.088, 0.092], [-0.125, 0.088, 0.092]]), o.cuff);       // gulungan celana
   add(knee, loft([[-0.1, 0.05, 0.052], [-SHIN - 0.01, 0.046, 0.05]], false, false), o.sock || o.skin);
-  add(foot, shoeGeo(), o.shoe, [0, -FOOT + 0.045, 0.03]);
-  add(foot, loft([[-FOOT, 0.07, 0.106, 0, 0.032], [-FOOT + 0.016, 0.074, 0.11, 0, 0.032]]), o.sole);
+  add(foot, shoeGeo(), o.shoe, [0, -FOOT + 0.042, 0.03]);
+  add(foot, loft([[-FOOT, 0.062, 0.096, 0, 0.032], [-FOOT + 0.014, 0.066, 0.1, 0, 0.032]]), o.sole);
   return { hip, knee, foot };
 }
 
@@ -113,16 +127,16 @@ function buildArm(torso, side, o) {
   shoulder.rotation.z = side * 0.32;
   torso.add(shoulder); shoulder.add(elbow);
   const b = o.bulk || 0;
-  add(shoulder, loft([[0.04, 0.045 + b, 0.05 + b], [-0.02, 0.07 + b, 0.072 + b], [-0.09, 0.078 + b, 0.08 + b], [-UPPER, 0.07 + b, 0.072 + b]]), o.sleeve);
-  if (o.armBand) add(shoulder, loft([[-0.05, 0.079 + b, 0.081 + b], [-0.08, 0.081 + b, 0.083 + b]], false, false), o.armBand);
+  add(shoulder, loft([[0.04, 0.04 + b, 0.044 + b], [-0.02, 0.06 + b, 0.062 + b], [-0.09, 0.066 + b, 0.068 + b], [-UPPER, 0.06 + b, 0.062 + b]]), o.sleeve);
+  if (o.armBand) add(shoulder, loft([[-0.05, 0.066 + b, 0.068 + b], [-0.08, 0.068 + b, 0.07 + b]], false, false), o.armBand);
   if (o.shortSleeve) {
     add(elbow, loft([[0.02, 0.046, 0.046], [-FORE, 0.04, 0.04]]), o.skin);
   } else {
-    add(elbow, loft([[0.015, 0.07 + b, 0.072 + b], [-0.05, 0.08 + b, 0.082 + b], [-0.095, 0.064 + b, 0.066 + b], [-FORE, 0.046, 0.048]]), o.sleeve);   // lengan baju menggembung
-    if (o.wristBand) add(elbow, loft([[-FORE + 0.028, 0.053, 0.055], [-FORE - 0.004, 0.05, 0.052]]), o.wristBand);
+    add(elbow, loft([[0.015, 0.06 + b, 0.062 + b], [-0.05, 0.067 + b, 0.069 + b], [-0.095, 0.054 + b, 0.056 + b], [-FORE, 0.04, 0.042]]), o.sleeve);   // lengan baju menggembung
+    if (o.wristBand) add(elbow, loft([[-FORE + 0.026, 0.046, 0.048], [-FORE - 0.004, 0.043, 0.045]]), o.wristBand);
   }
-  add(elbow, ball(0.047), o.skin, [0, -FORE - 0.03, 0.004], [0, 0, 0], [0.92, 1.08, 0.92]);     // tangan kecil
-  add(elbow, ball(0.02, 10, 8), o.skin, [side * -0.02, -FORE - 0.03, 0.036]);                   // ibu jari
+  add(elbow, ball(0.042), o.skin, [0, -FORE - 0.03, 0.004], [0, 0, 0], [0.86, 1.12, 0.72]);     // tangan kecil
+  add(elbow, ball(0.017, 10, 8), o.skin, [side * -0.018, -FORE - 0.022, 0.03]);                   // ibu jari
   return { shoulder, elbow };
 }
 
@@ -149,8 +163,11 @@ function fp(x, y) {
 function faceTex(o, closed) {
   const cv = document.createElement("canvas"); cv.width = FW; cv.height = FH;
   const c = cv.getContext("2d");
-  const ex = o.eyeX || 0.098, ey = o.eyeY || -0.05, rx = (o.eyeW || 0.041) * S, ry = (o.eyeH || 0.058) * S, ink = "#2b1a20";
+  const ex = o.eyeX || 0.104, ey = o.eyeY || -0.062, rx = (o.eyeW || 0.045) * S, ry = (o.eyeH || 0.066) * S, ink = "#2b1a20";
   c.lineCap = "round"; c.lineJoin = "round";
+  const fs = c.createLinearGradient(0, FH * 0.1, 0, FH * 0.44);                  // bayangan poni di dahi
+  fs.addColorStop(0, "rgba(190,110,90,0.26)"); fs.addColorStop(1, "rgba(170,90,80,0)");
+  c.fillStyle = fs; c.fillRect(0, 0, FW, FH * 0.44);
   for (const s of [-1, 1]) {
     const [bx, by] = fp(s * 0.14, ey - 0.08), br = 0.05 * S;                 // pipi merona
     const bl = c.createRadialGradient(bx, by, 0, bx, by, br);
@@ -225,84 +242,109 @@ function buildHead(head, o) {
   return (closed) => { fm.map = closed ? shut : open; };
 }
 
-// ---------------------------------------------------------------- rambut dari helai tebal
+// ---------------------------------------------------------------- rambut berlapis
+// Massa rambut membulat ditutup helai-helai yang mengalir dari ubun-ubun, menempel mengikuti bentuk kepala,
+// bertumpuk seperti sirap. Hanya ujung helai yang sedikit mencuat. Tekstur helai dilukis.
 const dir = (az, el) => { const a = az * Math.PI / 180, e = el * Math.PI / 180; return new THREE.Vector3(Math.sin(a) * Math.cos(e), Math.sin(e), Math.cos(a) * Math.cos(e)); };
-// tiap helai: [arah pangkal (az, el), arah ujung (az, el), jarak ujung dari pusat kepala, setengah lebar, angkat, tebal]
-function locks(head, o, list) {
-  const pos = [], col = [], idx = [], L = 14, M = 12;
-  const cA = new THREE.Color(o.hair2), cB = new THREE.Color(o.hair), cC = new THREE.Color(o.hair3), cc = new THREE.Color();
-  const p = new THREE.Vector3(), tan = new THREE.Vector3(), side = new THREE.Vector3(), nr = new THREE.Vector3();
-  for (const l of list) {
-    let A, B, C, w, th;
-    if (l.length >= 9) { A = dir(l[0], l[1]).multiplyScalar(0.26); C = dir(l[2], l[3]).multiplyScalar(l[4]); B = dir(l[5], l[6]).multiplyScalar(l[7]); w = l[8]; th = l[9] ?? 0.55; }
-    else { A = dir(l[0], l[1]).multiplyScalar(0.27); B = dir(l[2], l[3]).multiplyScalar(l[4]); w = l[5]; th = l[7] ?? 0.5; C = A.clone().add(B).normalize().multiplyScalar(Math.max(0.3, (0.3 + l[4]) / 2) + (l[6] ?? 0.03)); }
-    const base = pos.length / 3;
+const MC = new THREE.Vector3(0, 0.07, -0.08);
+const seed = (n) => () => { n = (n + 0x6d2b79f5) | 0; let t = Math.imul(n ^ (n >>> 15), 1 | n); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+function hairTex(o) {
+  const cv = document.createElement("canvas"); cv.width = 64; cv.height = 256;
+  const c = cv.getContext("2d"), g = c.createLinearGradient(0, 256, 0, 0), rnd = seed(3);
+  g.addColorStop(0, o.hair2); g.addColorStop(0.3, o.hair); g.addColorStop(0.62, o.hair3); g.addColorStop(0.8, o.hair); g.addColorStop(1, o.hair);
+  c.fillStyle = g; c.fillRect(0, 0, 64, 256);
+  for (let i = 0; i < 16; i++) {                                  // alur helai
+    c.fillStyle = i % 3 ? o.hair2 : o.hair3; c.globalAlpha = 0.12 + rnd() * 0.16;
+    c.fillRect(rnd() * 64, 0, 1 + rnd() * 2.5, 256);
+  }
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping;
+  return t;
+}
+// tiap helai: [az pangkal, el pangkal, az ujung, el ujung, setengah lebar, cuat ujung, angkat]
+function strands(head, o, r, list) {
+  const pos = [], uv = [], idx = [], L = 12, M = 8;
+  const d = new THREE.Vector3(), p = new THREE.Vector3(), q = new THREE.Vector3(), tan = new THREE.Vector3(), side = new THREE.Vector3(), nr = new THREE.Vector3();
+  const at = (d0, d1, om, t, flick, lift, out) => {
+    out.set(0, 0, 0).addScaledVector(d0, Math.sin((1 - t) * om)).addScaledVector(d1, Math.sin(t * om)).normalize();
+    const b = MC.dot(out), ride = Math.max(b + Math.sqrt(b * b - MC.lengthSq() + r * r) + 0.004, 0.316);
+    const f = Math.max(0, (t - 0.62) / 0.38);
+    return out.multiplyScalar(ride - 0.03 * (1 - t) ** 2 + lift * Math.sin(Math.PI * t) + flick * f * f);
+  };
+  for (const [a0, e0, a1, e1, w, flick = 0.04, lift = 0.018] of list) {
+    const d0 = dir(a0, e0), d1 = dir(a1, e1), om = Math.max(0.05, Math.acos(Math.max(-1, Math.min(1, d0.dot(d1))))), base = pos.length / 3;
     for (let i = 0; i <= L; i++) {
-      const t = i / L, u = 1 - t;
-      p.set(0, 0, 0).addScaledVector(A, u * u).addScaledVector(C, 2 * u * t).addScaledVector(B, t * t);
-      tan.set(0, 0, 0).addScaledVector(A, -2 * u).addScaledVector(C, 2 * u - 2 * t).addScaledVector(B, 2 * t).normalize();
-      side.crossVectors(tan, p).normalize(); nr.crossVectors(tan, side).normalize();
-      const rad = w * (0.7 + 0.3 * Math.sin(Math.min(1, t / 0.35) * Math.PI / 2)) * (1 - t ** 2.4);
-      t < 0.5 ? cc.lerpColors(cA, cB, t * 2) : cc.lerpColors(cB, cC, (t - 0.5) * 2);
+      const t = i / L;
+      at(d0, d1, om, t, flick, lift, p); at(d0, d1, om, Math.min(1.02, t + 0.02), flick, lift, q);
+      tan.subVectors(q, p).normalize(); d.copy(p).normalize();
+      side.crossVectors(tan, d).normalize(); nr.crossVectors(side, tan).normalize();
+      const rad = w * (0.5 + 0.5 * Math.sin(Math.min(1, t / 0.3) * Math.PI / 2)) * (1 - t ** 2.2) ** 1.25;
       for (let j = 0; j < M; j++) {
-        const a = j / M * Math.PI * 2, cs = Math.cos(a) * rad, sn = Math.sin(a) * rad * th;
-        pos.push(p.x + side.x * cs + nr.x * sn, p.y + side.y * cs + nr.y * sn, p.z + side.z * cs + nr.z * sn);
-        col.push(cc.r, cc.g, cc.b);
+        const a = j / M * Math.PI * 2, cs = Math.cos(a), sn = Math.sin(a);
+        const h = sn > 0 ? 0.44 * (1 - Math.abs(cs)) : 0.14 * sn;          // penampang berbubung di tengah, datar di bawah
+        pos.push(p.x + side.x * cs * rad + nr.x * h * rad, p.y + side.y * cs * rad + nr.y * h * rad, p.z + side.z * cs * rad + nr.z * h * rad);
+        uv.push(cs * 0.5 + 0.5, t);
       }
     }
     for (let i = 0; i < L; i++) for (let j = 0; j < M; j++) {
-      const a = base + i * M + j, b = base + i * M + (j + 1) % M, c2 = b + M, d = a + M;
-      idx.push(a, b, c2, a, c2, d);
+      const A = base + i * M + j, B = base + i * M + (j + 1) % M;
+      idx.push(A, B, B + M, A, B + M, A + M);
     }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
   g.setIndex(idx); g.computeVertexNormals();
-  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, side: THREE.DoubleSide }));
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: hairTex(o), roughness: 0.8, side: THREE.DoubleSide }));
   m.castShadow = true; m.receiveShadow = true; head.add(m);
 }
-const capHair = (head, o, r = 0.325) => add(head, ball(r, 32, 22), o.hair, [0, 0.06, -0.055], [0, 0, 0], [1.03, 1, 1.02]);
-const mir3 = (list) => list.flatMap((l) => [l, [-l[0], l[1], -l[2], l[3], l[4], -l[5], ...l.slice(6)]]);
-const mir = (list) => list.flatMap((l) => l[0] === 0 || l[0] === 180 ? [l] : [l, [-l[0], l[1], -l[2], ...l.slice(3)]]);
+function hairBase(head, o, r, S, sw, flick, tiers) {
+  add(head, ball(r, 36, 24), o.hair2m, MC.toArray());
+  const rnd = seed(o.seed || 7), j = (a) => (rnd() - 0.5) * a;
+  for (const [e0, e1, step, off, minAz, w] of tiers) for (let a = -180 + off; a < 180; a += step) {
+    if (Math.abs(a) < minAz) continue;
+    S.push([a + j(8), e0 + j(5), a + sw + j(8), e1 + j(8), w * (0.85 + rnd() * 0.3), flick * (0.5 + rnd())]);
+  }
+}
 const HAIR = {
-  // gumpalan besar yang disisir menyamping: poni lebar, gundukan di ubun-ubun, ujung mencuat di belakang
-  swept(head, o) {
-    capHair(head, o, 0.325 + (o.puff || 0));
-    const f = o.hairFlip ? -1 : 1, P = o.puff || 0, len = o.fringe || 0;
-    const L = [
-      // poni
-      [25, 74, 8, 44, 0.375, -24, 10 - len, 0.345, 0.135, 0.42], [6, 78, 20, 52, 0.372, 26, 22 - len, 0.345, 0.105, 0.42], [44, 70, 40, 42, 0.37, 30, 12 - len, 0.345, 0.11, 0.42],
-      [-12, 74, -38, 46, 0.375, -56, 0 - len, 0.345, 0.125, 0.42], [62, 62, 72, 34, 0.365, 70, -8, 0.335, 0.095, 0.45],
-      [-48, 64, -70, 38, 0.365, -80, -12, 0.335, 0.1, 0.45],
-      // depan telinga
-      ...mir3([[92, 44, 96, 6, 0.355, 86, -36, 0.33, 0.075, 0.5]]),
-      // gundukan ubun-ubun
-      [170, 70, 60, 76, 0.4 + P, 28, 54, 0.45 + P, 0.15, 0.55], [190, 70, -60, 76, 0.4 + P, -44, 50, 0.46 + P, 0.15, 0.55],
-      [140, 70, 108, 58, 0.43 + P, 98, 30, 0.49 + P, 0.14, 0.6], [-140, 70, -108, 58, 0.43 + P, -100, 26, 0.49 + P, 0.14, 0.6],
-      [150, 74, 30, 86, 0.4 + P, 40, 70, 0.5 + P, 0.07, 0.6],
-      // belakang, ujung mencuat keluar
-      ...mir3([[150, 62, 150, 30, 0.46 + P, 140, 0, 0.5 + P, 0.15, 0.6], [112, 30, 118, 2, 0.43 + P, 110, -28, 0.45 + P, 0.12, 0.6],
-        [160, 22, 162, -8, 0.44 + P, 156, -36, 0.46 + P, 0.125, 0.6]]),
-      [180, 64, 180, 30, 0.47 + P, 176, -2, 0.52 + P, 0.16, 0.6], [180, 20, 180, -14, 0.44 + P, 184, -42, 0.45 + P, 0.12, 0.6],
-    ];
-    locks(head, o, L.map((l) => [f * l[0], l[1], f * l[2], l[3], l[4], f * l[5], ...l.slice(6)]));
+  // potongan anak laki-laki: berlapis, sedikit acak, poni menutup dahi sampai alis
+  tousle(head, o) {
+    const r = 0.348 + (o.puff || 0), S = [], f = o.hairFlip ? -1 : 1;
+    hairBase(head, o, r, S, 14 * f, 0.05, [[82, 46, 40, 10, 0, 0.105], [58, 16, 30, 15, 58, 0.1], [30, -14, 30, 0, 80, 0.095], [4, -40, 28, 12, 104, 0.085]]);
+    for (const [a0, a1, e1, w] of o.fringe) S.push([f * a0, 66, f * a1, e1 + 9, w, 0.014, 0.03]);
+    for (const s of [-1, 1]) S.push([s * 78, 52, s * 76, -22, 0.058, 0.02, 0.02], [s * 92, 46, s * 90, -32, 0.06, 0.03, 0.02]);
+    strands(head, o, r, S);
   },
-  bun(head, o) {                                     // belah tengah rapi dengan sanggul
-    capHair(head, o, 0.328);
-    locks(head, o, [
-      ...mir([[4, 74, 58, 14, 0.342, 0.16, 0.07, 0.3], [34, 68, 80, -4, 0.34, 0.12, 0.05, 0.32],
-        ...(o.sideLocks ? [[84, 30, 78, -44, 0.335, 0.05, 0.03]] : [])]),
-    ]);
-    const y = o.bunY ?? 0.2, z = o.bunZ ?? -0.34;
-    add(head, ball(0.115), o.hair, [0, y, z], [0, 0, 0], [1.1, 0.95, 0.9]);
-    add(head, new THREE.TorusGeometry(0.075, 0.022, 8, 20), o.hair2, [0, y - 0.03, z + 0.07], [0.9, 0, 0]);
-    add(head, new THREE.CylinderGeometry(0.008, 0.008, 0.34, 8), mat("#e0b040", { roughness: 0.35, metalness: 0.5 }), [0.02, y + 0.01, z], [0, 0, 1.15]);   // tusuk konde
+  // rambut ibu dan nenek: belah tengah, disisir ke belakang, sanggul
+  bun(head, o) {
+    const r = 0.35, S = [];
+    hairBase(head, o, r, S, 0, 0.004, [[82, 46, 40, 10, 0, 0.11], [58, 16, 30, 15, 58, 0.105], [30, -12, 30, 0, 80, 0.1]]);
+    for (const s of [-1, 1]) {
+      S.push([s * 4, 74, s * 52, 16, 0.12, 0.004, 0.03], [s * 26, 68, s * 76, 0, 0.1, 0.004, 0.025]);
+      if (o.sideLocks) S.push([s * 78, 40, s * 72, -40, 0.045, 0.02, 0.02]);
+    }
+    strands(head, o, r, S);
+    const y = o.bunY ?? 0.2, z = o.bunZ ?? -0.36;
+    add(head, ball(0.115), o.hairm, [0, y, z], [0, 0, 0], [1.1, 0.95, 0.9]);
+    add(head, new THREE.TorusGeometry(0.075, 0.022, 8, 20), o.hair2m, [0, y - 0.03, z + 0.07], [0.9, 0, 0]);
+    add(head, new THREE.CylinderGeometry(0.008, 0.008, 0.34, 8), gold(), [0.02, y + 0.01, z], [0, 0, 1.15]);   // tusuk konde
   },
 };
 
 // ---------------------------------------------------------------- data karakter
-const batik = (base, motif, dot) => cloth(256, 256, (c, w, h) => {
+// bayangan lukis di atas kain: gelap di bawah dagu dan di ujung bawah, ditambah garis lipatan
+function paint(c, w, h, x0) {
+  let g = c.createLinearGradient(0, 0, 0, h * 0.34);
+  g.addColorStop(0, "rgba(64,36,74,0.42)"); g.addColorStop(1, "rgba(64,36,74,0)");
+  c.fillStyle = g; c.fillRect(0, 0, w, h);
+  g = c.createLinearGradient(0, h * 0.62, 0, h);
+  g.addColorStop(0, "rgba(64,36,74,0)"); g.addColorStop(1, "rgba(64,36,74,0.34)");
+  c.fillStyle = g; c.fillRect(0, 0, w, h);
+  c.strokeStyle = "rgba(64,36,74,0.2)"; c.lineWidth = 5; c.lineCap = "round";
+  for (const s of [-1, 1]) for (const [dx, y] of [[96, 0.5], [128, 0.66], [168, 0.42], [214, 0.6]]) {
+    c.beginPath(); c.moveTo(x0 + s * dx, h * y); c.quadraticCurveTo(x0 + s * (dx + 12), h * (y + 0.12), x0 + s * (dx - 4), h * (y + 0.26)); c.stroke();
+  }
+}
+const batik = (base, motif, dot, shade) => cloth(256, 256, (c, w, h, x0) => {
   c.fillStyle = base; c.fillRect(0, 0, w, h);
   for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) {
     const x = i * 32 + (j % 2) * 16 + 8, y = j * 32 + 14;
@@ -310,83 +352,91 @@ const batik = (base, motif, dot) => cloth(256, 256, (c, w, h) => {
     for (let k = 0; k < 4; k++) { c.beginPath(); c.ellipse(x + Math.cos(k * Math.PI / 2) * 6, y + Math.sin(k * Math.PI / 2) * 6, 5, 3, k * Math.PI / 2, 0, 7); c.fill(); }
     c.fillStyle = dot; c.beginPath(); c.arc(x, y, 2.6, 0, 7); c.fill();
   }
+  if (shade) paint(c, w, h, x0);
 });
-// baju berbentuk lonceng: melebar di bawah, menyempit ke leher
-const TORSO = [[-0.075, 0.196, 0.172], [-0.04, 0.204, 0.18], [0.05, 0.186, 0.164], [0.15, 0.158, 0.138], [0.24, 0.128, 0.114], [0.3, 0.092, 0.088], [0.335, 0.05, 0.05]];
-const SLIM = [[-0.03, 0.168, 0.15], [0.05, 0.166, 0.148], [0.15, 0.15, 0.132], [0.24, 0.124, 0.11], [0.3, 0.09, 0.086], [0.335, 0.05, 0.05]];
-const SKIRT = [[0.0, 0.166, 0.148], [-0.1, 0.2, 0.18], [-0.24, 0.232, 0.212], [-0.29, 0.238, 0.218]];
-const gold = () => mat("#f0c040", { roughness: 0.35, metalness: 0.5 });
+const TORSO = [[-0.07, 0.178, 0.156], [-0.04, 0.186, 0.164], [0.05, 0.176, 0.154], [0.15, 0.152, 0.132], [0.24, 0.126, 0.112], [0.3, 0.092, 0.088], [0.335, 0.05, 0.05]];
+const SLIM = [[-0.03, 0.162, 0.146], [0.05, 0.16, 0.144], [0.15, 0.146, 0.13], [0.24, 0.122, 0.108], [0.3, 0.09, 0.086], [0.335, 0.05, 0.05]];
+const SKIRT = [[0.0, 0.16, 0.144], [-0.1, 0.19, 0.172], [-0.24, 0.218, 0.2], [-0.29, 0.222, 0.204]];
+const gold = () => mat("#f0c040", { roughness: 0.35, metalness: 0.5, flat: true });
+const tex = (t) => new THREE.MeshStandardMaterial({ map: t, roughness: 1 });
 const CHARS = {
   nino: {
-    name: "Nino", scale: 1, skin: "#f0c09a", hair: "#4a3a52", hair2: "#2c2236", hair3: "#75608a", hairFn: "swept", iris: ["#2a1612", "#7a4426", "#c98444"],
-    pants: "#4668b8", cuff: "#7c9be0", sock: "#ffffff", shoe: "#fafafa", sole: "#f07a2a", sleeve: "#f08a34", armBand: "#ffffff", wristBand: "#c8601e",
-    body: () => mat("#ffffff", { map: cloth(512, 256, (c, w, h, x0) => {   // jaket balap terbuka di atas kaos gelap
-      c.fillStyle = "#f08a34"; c.fillRect(0, 0, w, h);
-      c.fillStyle = "#2f3658"; c.beginPath(); c.moveTo(x0 - 34, 0); c.lineTo(x0 + 34, 0); c.lineTo(x0 + 22, h); c.lineTo(x0 - 22, h); c.fill();
-      c.fillStyle = "#ffe2b0"; c.fillRect(x0 - 8, h * 0.42, 16, 16);                                   // gambar kecil di kaos
-      c.strokeStyle = "#fff4e0"; c.lineWidth = 7;
-      for (const s of [-1, 1]) { c.beginPath(); c.moveTo(x0 + s * 37, 0); c.lineTo(x0 + s * 25, h); c.stroke(); }
-      c.fillStyle = "#ffffff"; c.fillRect(x0 - 78, 0, 12, h * 0.9); c.fillRect(x0 + 66, 0, 12, h * 0.9);
-      c.fillStyle = "#c8601e"; c.fillRect(0, 0, w, 26);
-    }) }),
+    name: "Nino", scale: 1, skin: "#f6cfae", hair: "#6a4a3e", hair2: "#3e2822", hair3: "#b58a6a", hairFn: "tousle", iris: ["#2a1410", "#84462a", "#d08a4a"],
+    fringe: [[-60, -70, -2, 0.07], [-42, -52, 8, 0.075], [-24, -30, 2, 0.075], [-6, -10, -6, 0.07], [12, 8, 10, 0.075], [32, 34, 4, 0.075], [52, 62, -2, 0.07]],
+    pants: "#4a6cc0", cuff: "#86a4ea", sock: "#ffffff", shoe: "#fbfbfb", sole: "#f07a2a", sleeve: "#f28c36", armBand: "#fff6e6", wristBand: "#c8601e",
+    body: () => tex(cloth(512, 256, (c, w, h, x0) => {   // jaket balap terbuka di atas kaos gelap
+      c.fillStyle = "#f28c36"; c.fillRect(0, 0, w, h);
+      c.fillStyle = "#313a60"; c.beginPath(); c.moveTo(x0 - 30, 0); c.lineTo(x0 + 30, 0); c.lineTo(x0 + 20, h); c.lineTo(x0 - 20, h); c.fill();
+      c.fillStyle = "#ffd24a"; c.beginPath(); c.arc(x0, h * 0.5, 9, 0, 7); c.fill();                    // gambar kecil di kaos
+      c.strokeStyle = "#fff6e6"; c.lineWidth = 7;
+      for (const s of [-1, 1]) { c.beginPath(); c.moveTo(x0 + s * 33, 0); c.lineTo(x0 + s * 23, h); c.stroke(); }
+      c.fillStyle = "#fff6e6"; c.fillRect(x0 - 80, h * 0.18, 11, h * 0.7); c.fillRect(x0 + 69, h * 0.18, 11, h * 0.7);
+      c.strokeStyle = "rgba(150,70,20,0.6)"; c.lineWidth = 3;                                           // kantong
+      for (const s of [-1, 1]) { c.beginPath(); c.moveTo(x0 + s * 96, h * 0.62); c.lineTo(x0 + s * 118, h * 0.8); c.stroke(); }
+      c.fillStyle = "#c8601e"; c.fillRect(0, h - 24, w, 24);
+      paint(c, w, h, x0);
+    })),
     extra(p) {
-      add(p.torso, loft([[0.275, 0.108, 0.1, 0, -0.012], [0.33, 0.1, 0.092, 0, -0.016]], false, false), "#ffa050");   // kerah berdiri
-      add(p.head, ball(0.03, 12, 8), "#fff0d8", [0.31, -0.04, -0.05], [0, 0, 0], [0.6, 1.25, 0.9]);              // alat bantu dengar
+      add(p.torso, loft([[0.275, 0.108, 0.1, 0, -0.012], [0.335, 0.098, 0.09, 0, -0.016]], false, false), "#ffa24e");   // kerah berdiri
+      add(p.head, ball(0.03, 12, 8), "#fff0d8", [0.3, -0.04, -0.05], [0, 0, 0], [0.6, 1.25, 0.9]);                  // alat bantu dengar
     },
   },
   kael: {
-    name: "Kael", scale: 1.03, skin: "#f6d0ae", hair: "#9a6238", hair2: "#6a3e20", hair3: "#cf9558", hairFn: "swept", hairFlip: true, puff: 0.015, fringe: 6, sleepy: true, mouth: "flat", bulk: 0.008,
-    iris: ["#2a1a12", "#56703a", "#a8c468"],
-    pants: "#565a70", sock: "#e8e8f0", shoe: "#6a7088", sole: "#3a3c4c", sleeve: "#98a6bc", wristBand: "#7a889e",
-    torso: [[-0.085, 0.208, 0.184], [-0.04, 0.216, 0.192], [0.05, 0.198, 0.174], [0.15, 0.168, 0.146], [0.24, 0.134, 0.118], [0.3, 0.095, 0.09], [0.335, 0.05, 0.05]],
-    body: () => mat("#ffffff", { map: cloth(512, 256, (c, w, h, x0) => {   // hoodie kebesaran
-      c.fillStyle = "#98a6bc"; c.fillRect(0, 0, w, h);
-      c.fillStyle = "#7a889e"; c.fillRect(0, 0, w, 24);
-      c.fillStyle = "#8694aa"; c.beginPath(); c.roundRect(x0 - 50, 44, 100, 62, 10); c.fill();          // kantong
-      c.fillStyle = "#ffffff"; c.fillRect(x0 - 13, h * 0.62, 5, h * 0.3); c.fillRect(x0 + 8, h * 0.62, 5, h * 0.3);   // tali
-    }) }),
+    name: "Kael", scale: 1.03, skin: "#f8d8ba", hair: "#a2683c", hair2: "#6a3e20", hair3: "#e0aa66", hairFn: "tousle", hairFlip: true, puff: 0.012, seed: 21,
+    sleepy: true, mouth: "flat", bulk: 0.006, iris: ["#26200f", "#5a7a3a", "#b4cc6c"],
+    fringe: [[-60, -72, -8, 0.075], [-40, -56, -2, 0.08], [-20, -40, -10, 0.08], [0, -18, -4, 0.08], [20, 4, 6, 0.08], [40, 36, 0, 0.075], [58, 64, -8, 0.07]],
+    pants: "#5a5e76", sock: "#e8e8f0", shoe: "#727a94", sole: "#3a3c4c", sleeve: "#9eacc2", wristBand: "#7e8ca2",
+    torso: [[-0.08, 0.192, 0.17], [-0.04, 0.2, 0.178], [0.05, 0.188, 0.166], [0.15, 0.162, 0.142], [0.24, 0.132, 0.116], [0.3, 0.095, 0.09], [0.335, 0.05, 0.05]],
+    body: () => tex(cloth(512, 256, (c, w, h, x0) => {   // hoodie kebesaran
+      c.fillStyle = "#9eacc2"; c.fillRect(0, 0, w, h);
+      c.fillStyle = "#8a98ae"; c.beginPath(); c.roundRect(x0 - 50, h * 0.56, 100, 62, 10); c.fill();      // kantong
+      c.fillStyle = "#ffffff"; c.fillRect(x0 - 13, 0, 5, h * 0.42); c.fillRect(x0 + 8, 0, 5, h * 0.46);    // tali
+      c.fillStyle = "#7e8ca2"; c.fillRect(0, h - 24, w, 24);
+      paint(c, w, h, x0);
+    })),
     extra(p) {
-      add(p.torso, ball(0.13), "#8694aa", [0, 0.27, -0.115], [0.3, 0, 0], [1.25, 0.8, 0.62]);            // tudung
-      const dk = mat("#2c2c3a", { roughness: 0.5 });
-      add(p.torso, new THREE.TorusGeometry(0.112, 0.02, 10, 28, Math.PI * 1.25), dk, [0, 0.318, -0.01], [Math.PI / 2 - 0.12, 0, Math.PI * 0.875 + Math.PI]);   // headset di leher
+      add(p.torso, ball(0.13), "#8a98ae", [0, 0.27, -0.11], [0.3, 0, 0], [1.2, 0.8, 0.6]);               // tudung
+      const dk = mat("#2c2c3a", { roughness: 0.5, flat: true });
+      add(p.torso, new THREE.TorusGeometry(0.108, 0.018, 10, 28, Math.PI * 1.25), dk, [0, 0.318, -0.01], [Math.PI / 2 - 0.12, 0, Math.PI * 1.875]);   // headset di leher
       for (const s of [-1, 1]) {
-        add(p.torso, new THREE.CylinderGeometry(0.052, 0.052, 0.045, 20), dk, [s * 0.118, 0.3, 0.07], [0, 0, Math.PI / 2], [1, 1, 1]);
-        add(p.torso, new THREE.CylinderGeometry(0.03, 0.03, 0.012, 20), mat("#40f0d8", { emissive: "#40f0d8", emissiveIntensity: 1.2 }), [s * 0.143, 0.3, 0.07], [0, 0, Math.PI / 2]);
+        add(p.torso, new THREE.CylinderGeometry(0.048, 0.048, 0.04, 20), dk, [s * 0.112, 0.3, 0.066], [0, 0, Math.PI / 2]);
+        add(p.torso, new THREE.CylinderGeometry(0.028, 0.028, 0.012, 20), mat("#40f0d8", { emissive: "#40f0d8", emissiveIntensity: 1.2, flat: true }), [s * 0.134, 0.3, 0.066], [0, 0, Math.PI / 2]);
       }
     },
   },
   ibu: {
-    name: "Ibu Nino", scale: 1.04, skin: "#eebc94", hair: "#40303e", hair2: "#261c28", hair3: "#6a5068", hairFn: "bun", lashes: true, sideLocks: true,
+    name: "Ibu Nino", scale: 1.05, skin: "#f2c8a4", hair: "#46343f", hair2: "#261c28", hair3: "#7c6072", hairFn: "bun", lashes: true, sideLocks: true,
     iris: ["#2a1612", "#703c2a", "#b8744a"],
-    bareLegs: true, shoe: "#9a5e3c", sole: "#5e3a22", sleeve: "#d24e70", shortSleeve: true, torso: SLIM,
-    dress: () => mat("#ffffff", { map: batik("#d24e70", "#ffd878", "#7a1e38") }),
-    body: () => mat("#ffffff", { map: batik("#d24e70", "#ffd878", "#7a1e38") }),
+    bareLegs: true, shoe: "#9a5e3c", sole: "#5e3a22", sleeve: "#d6557a", shortSleeve: true, torso: SLIM,
+    dress: () => tex(batik("#d6557a", "#ffd878", "#7a1e38")),
+    body: () => tex(batik("#d6557a", "#ffd878", "#7a1e38", true)),
     extra(p) {
       add(p.torso, loft([[0.285, 0.1, 0.094], [0.325, 0.07, 0.068]], false, false), "#ffe6c8");           // kerah
-      for (const s of [-1, 1]) add(p.head, ball(0.02, 10, 8), gold(), [s * 0.3, -0.11, -0.02]);       // anting
+      for (const s of [-1, 1]) add(p.head, ball(0.018, 10, 8), gold(), [s * 0.292, -0.115, -0.02]);       // anting
     },
   },
   nenek: {
-    name: "Nenek Kael", scale: 0.92, skin: "#eec0a0", hair: "#d0d0de", hair2: "#a4a4bc", hair3: "#f4f4fc", hairFn: "bun", hunch: 0.14, wrinkle: true,
-    bunY: 0.3, bunZ: -0.24, eyeH: 0.046, eyeW: 0.036, iris: ["#2e2220", "#6a4c40", "#a88670"],
+    name: "Nenek Kael", scale: 0.92, skin: "#f0c8aa", hair: "#d4d4e2", hair2: "#a2a2ba", hair3: "#fbfbff", hairFn: "bun", hunch: 0.14, wrinkle: true,
+    bunY: 0.3, bunZ: -0.27, eyeH: 0.05, eyeW: 0.038, iris: ["#2e2220", "#6a4c40", "#a88670"],
     bareLegs: true, shoe: "#74503c", sole: "#4a3022", sleeve: "#7cb898", wristBand: "#ffffff", torso: SLIM,
-    dress: () => mat("#ffffff", { map: cloth(256, 256, (c, w, h) => {   // sarung batik bergaris
+    dress: () => tex(cloth(256, 256, (c, w, h) => {   // sarung batik bergaris
       c.fillStyle = "#845836"; c.fillRect(0, 0, w, h);
       for (let y = 10; y < h; y += 44) { c.fillStyle = "#e8b858"; c.fillRect(0, y, w, 7); c.fillStyle = "#56341a"; c.fillRect(0, y + 11, w, 3); }
       c.fillStyle = "#e8b858";
       for (let j = 0; j < 6; j++) for (let i = 0; i < 16; i++) { c.beginPath(); c.arc(i * 16 + (j % 2) * 8, j * 44 + 32, 2.6, 0, 7); c.fill(); }
-    }) }),
-    body: () => mat("#ffffff", { map: cloth(512, 256, (c, w, h, x0) => {   // kebaya dengan renda
+    })),
+    body: () => tex(cloth(512, 256, (c, w, h, x0) => {   // kebaya dengan renda
       c.fillStyle = "#7cb898"; c.fillRect(0, 0, w, h);
       c.fillStyle = "#569070"; c.fillRect(x0 - 4, 0, 8, h);
-      c.fillStyle = "#ffffff"; c.fillRect(0, 0, w, 16);
-      for (let x = 0; x < w; x += 16) { c.beginPath(); c.arc(x + 8, 16, 7, 0, Math.PI); c.fill(); }
-    }) }),
+      c.fillStyle = "#ffffff"; c.fillRect(0, h - 14, w, 14);
+      for (let x = 0; x < w; x += 16) { c.beginPath(); c.arc(x + 8, h - 14, 7, Math.PI, 0); c.fill(); }
+      paint(c, w, h, x0);
+    })),
     extra(p) {
-      add(p.torso, ball(0.022, 10, 8), gold(), [0, 0.24, 0.118]);                                           // bros
-      const frame = mat("#8a5a3c", { roughness: 0.45 });
-      for (const s of [-1, 1]) add(p.head, new THREE.TorusGeometry(0.052, 0.007, 8, 28), frame, [s * 0.101, -0.052, 0.286], [0.06, s * 0.34, 0]);   // kacamata bulat
-      add(p.head, new THREE.CylinderGeometry(0.006, 0.006, 0.07, 8), frame, [0, -0.046, 0.304], [0, 0, Math.PI / 2]);
+      add(p.torso, ball(0.02, 10, 8), gold(), [0, 0.24, 0.116]);                                            // bros
+      const frame = mat("#8a5a3c", { roughness: 0.45, flat: true });
+      for (const s of [-1, 1]) add(p.head, new THREE.TorusGeometry(0.056, 0.007, 8, 28), frame, [s * 0.104, -0.062, 0.284], [0.08, s * 0.34, 0]);   // kacamata bulat
+      add(p.head, new THREE.CylinderGeometry(0.006, 0.006, 0.07, 8), frame, [0, -0.056, 0.304], [0, 0, Math.PI / 2]);
     },
   },
 };
@@ -396,7 +446,9 @@ export const CHAR_KEYS = Object.keys(CHARS);
 export const charName = (key) => CHARS[key].name;
 
 export function buildChar(key) {
-  const o = CHARS[key];
+  const o = { ...CHARS[key] };
+  o.hairm = mat(o.hair, { flat: true, roughness: 0.8 }); o.hair2m = mat(o.hair2, { flat: true, roughness: 0.8 });
+  o.skin = mat(o.skin, { sh: "#d07860" });
   const root = new THREE.Group(), body = new THREE.Group(), hips = new THREE.Group(), torso = new THREE.Group(), head = new THREE.Group();
   root.add(body); body.add(hips); hips.add(torso); torso.add(head);
   body.scale.setScalar(o.scale * K);
