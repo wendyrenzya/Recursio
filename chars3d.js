@@ -111,24 +111,28 @@ function buildArm(torso, side, o) {
 // kepala dipahat: dagu, rahang, pipi, pelipis, ubun-ubun
 const HEAD_RINGS = [[0, 0.07, 0.085, 0, 0.035], [0.05, 0.135, 0.145, 0, 0.018], [0.14, 0.172, 0.178], [0.26, 0.182, 0.188], [0.36, 0.166, 0.176], [0.42, 0.112, 0.124], [0.445, 0.03, 0.04]];
 function buildFace(head, o) {
-  const dark = mat("#2a1d2e", { roughness: 0.4 }), white = mat("#ffffff", { roughness: 0.6 }), shine = mat("#ffffff", { emissive: "#ffffff", emissiveIntensity: 0.4 });
+  const dark = mat("#2a1d2e", { roughness: 0.4 }), shine = mat("#ffffff", { emissive: "#ffffff", emissiveIntensity: 0.5 });
+  const blush = mat("#f08a84", { transparent: true, opacity: 0.5 });
   const eyes = [], Z = 0.2;
   for (const side of [-1, 1]) {
     const e = new THREE.Group();
-    e.position.set(side * 0.082, 0.19, Z);
+    e.position.set(side * 0.086, 0.172, Z);
     head.add(e);
-    add(e, new THREE.CircleGeometry(0.05, 8), white, [0, 0, 0], [0, 0, Math.PI / 8], [0.92, o.sleepy ? 0.62 : 1.15, 1]);
-    add(e, new THREE.CircleGeometry(0.035, 8), dark, [side * -0.006, -0.004, 0.003], [0, 0, Math.PI / 8], [1, o.sleepy ? 0.8 : 1.12, 1]);
-    add(e, new THREE.CircleGeometry(0.011, 6), shine, [side * -0.006 - 0.012, 0.016, 0.006]);
-    if (o.sleepy) add(e, box(0.11, 0.036, 0.012), o.skin, [0, 0.04, 0.006]);                       // kelopak setengah menutup
-    if (o.lashes) add(e, box(0.045, 0.012, 0.01), dark, [side * 0.045, 0.04, 0.004], [0, 0, side * 0.6]);
-    add(head, box(0.095, 0.03, 0.02), o.hair2, [side * 0.084, o.sleepy ? 0.262 : 0.272, Z + 0.004], [0, 0, side * (o.sleepy ? 0.16 : -0.14)]);   // alis tebal
+    // mata gelap besar tanpa putih di sekelilingnya, dengan kilau besar dan garis kelopak atas
+    add(e, new THREE.CircleGeometry(0.046, 8), dark, [0, 0, 0], [0, 0, Math.PI / 8], [0.9, o.sleepy ? 0.7 : 1.18, 1]);
+    add(e, new THREE.CircleGeometry(0.017, 6), shine, [-0.014, o.sleepy ? 0.004 : 0.022, 0.004]);
+    add(e, new THREE.CircleGeometry(0.008, 6), shine, [0.014, o.sleepy ? -0.014 : -0.02, 0.004]);
+    add(e, box(0.1, 0.014, 0.012), dark, [side * 0.004, o.sleepy ? 0.006 : 0.05, 0.004], [0, 0, side * -0.12]);
+    if (o.sleepy) add(e, box(0.11, 0.05, 0.01), o.skin, [0, 0.037, 0.003]);                          // kelopak setengah menutup
+    if (o.lashes) add(e, box(0.04, 0.012, 0.01), dark, [side * 0.056, 0.058, 0.004], [0, 0, side * 0.7]);
+    add(head, box(0.07, 0.018, 0.02), o.hair2, [side * 0.088, o.sleepy ? 0.25 : 0.262, Z + 0.002], [0, 0, side * (o.sleepy ? 0.1 : -0.1)]);   // alis lembut
+    add(head, new THREE.CircleGeometry(0.03, 8), blush, [side * 0.112, 0.112, Z - 0.014]);          // pipi merona
     add(head, loft([[0.15, 0.03, 0.045], [0.21, 0.04, 0.05], [0.25, 0.028, 0.04]]), o.skin, [side * 0.188, 0, -0.02]);   // telinga
     eyes.push(e);
   }
-  add(head, box(0.04, 0.045, 0.04), o.skin2, [0, 0.118, Z - 0.004], [0.5, 0, 0]);                 // hidung
-  add(head, box(0.05, 0.011, 0.012), "#8a3f38", [0, 0.07, Z - 0.014]);                           // mulut
-  for (const side of [-1, 1]) add(head, box(0.011, 0.011, 0.012), "#8a3f38", [side * 0.03, 0.076, Z - 0.016]);   // ujung senyum
+  add(head, box(0.03, 0.028, 0.03), o.skin2, [0, 0.122, Z - 0.008], [0.4, 0, 0]);                  // hidung kecil
+  add(head, box(0.042, 0.011, 0.012), "#8a3f38", [0, 0.07, Z - 0.014]);                           // senyum
+  for (const side of [-1, 1]) add(head, box(0.012, 0.012, 0.012), "#8a3f38", [side * 0.027, 0.078, Z - 0.016]);
   return eyes;
 }
 
