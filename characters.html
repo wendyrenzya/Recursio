@@ -73,6 +73,7 @@ function frame(now) {
   camera.position.set(...view.pos); camera.lookAt(...view.look);
   for (const a of actors) { a.root.rotation.y = state.yaw; a.update(dt, state.walk ? dt * 2.2 : 0, state.walk); }
   renderer.render(scene, camera);
+  window.__calls = renderer.info.render.calls;
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

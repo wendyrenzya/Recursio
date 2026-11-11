@@ -4,6 +4,8 @@
 // dan menggerakkan jalan, napas, serta kedip.
 import * as THREE from "./lib/three.module.min.js";
 import { GLTFLoader } from "./lib/GLTFLoader.js";
+import { MeshoptDecoder } from "./lib/meshopt_decoder.module.js";
+import { mergeGeometries } from "./lib/BufferGeometryUtils.js";
 
 // tint: warna pengali untuk bahan yang namanya mengandung kata kunci
 // grey: bahan yang teksturnya diubah menjadi abu-abu terang (rambut beruban)
@@ -17,12 +19,43 @@ const CHARS = {
     face: { eyeJoy: 0.2, mthFun: 0.3 } },
   nenek: { name: "Nenek Kael", height: 1.46, grey: ["Hair", "FaceBrow"], hunch: 0.2, morph: M12, tint: { Tops: "#c8aa94" },
     face: { eyeJoy: 1, mthFun: 0.5, brwSorrow: 0.35 }, glasses: true,
+    head: { cx: 0, sx: 0.0946, ey: 1.313, h: 0.0843, fz: 0.0974, back: -0.112 },
     bun: { y: 1.15, size: 0.5, base: "#cfd1da", light: "rgba(255,255,255,0.35)", dark: "rgba(120,124,140,0.3)", pin: true } },
 };
 export const CHAR_KEYS = Object.keys(CHARS);
 export const charName = (key) => CHARS[key].name;
 
-const loader = new GLTFLoader();
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);   // geometri model dikompres meshopt
+
+// atribut hasil kompresi bisa berbeda jenis angka antarpotongan; samakan ke Float32 agar bisa digabung
+function toFloat(geo) {
+  const g = new THREE.BufferGeometry();
+  g.setIndex(geo.index);
+  for (const name in geo.attributes) {
+    const a = geo.attributes[name], out = new Float32Array(a.count * a.itemSize);
+    for (let i = 0; i < a.count; i++) for (let j = 0; j < a.itemSize; j++) out[i * a.itemSize + j] = a.getComponent(i, j);
+    g.setAttribute(name, new THREE.BufferAttribute(out, a.itemSize));
+  }
+  return g;
+}
+
+// satukan potongan mesh tanpa morf yang memakai bahan sama, supaya satu bahan cukup satu panggilan gambar
+function mergeByMaterial(model) {
+  const groups = new Map();
+  model.traverse((n) => {
+    if (!n.isSkinnedMesh || n.geometry.morphAttributes.position) return;
+    const k = n.parent.uuid + n.material.uuid;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(n);
+  });
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    const g = mergeGeometries(list.map((m) => toFloat(m.geometry)));
+    if (!g) continue;
+    list[0].geometry = g;
+    for (const m of list.slice(1)) m.removeFromParent();
+  }
+}
 
 // salin tekstur ke kanvas dan ubah tiap piksel menjadi abu-abu terang, alfa dipertahankan
 function greyTex(map) {
@@ -40,35 +73,14 @@ function greyTex(map) {
 }
 
 // Aksesori kepala: kacamata bulat dan sanggul ditempel ke tulang kepala.
-// Letak diukur dari kotak mesh wajah: x dalam setengah lebar wajah (sx) dari tengah, y dalam jarak mata ke dagu (h).
-function addHeadExtras(model, B, o) {
-  let skin = null, ey = 0, ne = 0;
-  const hairs = [];
-  model.traverse((n) => {
-    if (/^J_Adj_[LR]_FaceEye$/.test(n.name)) { ey += n.getWorldPosition(new THREE.Vector3()).y; ne++; }
-    if (!n.isMesh) return;
-    if (n.material.name.includes("Face_00_SKIN")) skin = n;
-    if (n.material.name.includes("_HAIR")) hairs.push(n);
-  });
-  ey /= ne;
-  const P = [], uv = skin.geometry.attributes.uv, v = new THREE.Vector3(), box = new THREE.Box3();
-  for (let i = 0; i < uv.count; i++) {
-    skin.getVertexPosition(i, v).applyMatrix4(skin.matrixWorld);
-    P.push([v.x, v.y, v.z, uv.getX(i), uv.getY(i)]); box.expandByPoint(v);
-  }
-  const cx = (box.min.x + box.max.x) / 2, sx = (box.max.x - box.min.x) / 2, h = ey - box.min.y, zc = (box.min.z + box.max.z) / 2;
-  const front = P.filter((p) => p[2] > zc);
-  const at = (fx, fy) => {                                                    // z permukaan wajah di titik (fx, fy)
-    const x = cx + fx * sx, y = ey + fy * h;
-    const near = front.map((p) => [Math.hypot(p[0] - x, p[1] - y), p]).sort((a, b) => a[0] - b[0]).slice(0, 4);
-    let w = 0, u = 0, t = 0, z = 0;
-    for (const [dd, p] of near) { const k = 1 / (dd + 1e-4); w += k; u += k * p[3]; t += k * p[4]; z += k * p[2]; }
-    return { u: u / w, v: t / w, z: z / w, x, y };
-  };
+// Ukuran kepala o.head diukur sekali dari model sebelum dikompres (posisi titik model terkompres tidak bisa dibaca akurat):
+// cx tengah wajah, sx setengah lebar wajah, ey tinggi mata, h jarak mata ke dagu, fz depan wajah di mata, back belakang rambut.
+function addHeadExtras(B, o) {
+  const { cx, sx, ey, h, fz, back } = o.head;
   // kacamata bulat di depan mata
   const frame = new THREE.MeshStandardMaterial({ color: "#7a5236", roughness: 0.4, metalness: 0.3 });
   if (o.glasses) {
-  const glasses = new THREE.Group(), R = 0.32 * sx, fz = Math.max(at(-0.47, 0).z, at(0.47, 0).z, at(0, -0.3).z) + 0.012;
+  const glasses = new THREE.Group(), R = 0.32 * sx;
   for (const s of [-1, 1]) {
     const ring = new THREE.Mesh(new THREE.TorusGeometry(R, 0.022 * sx, 8, 32), frame);
     ring.position.set(cx + s * 0.47 * sx, ey - 0.03 * h, fz); glasses.add(ring);
@@ -83,14 +95,6 @@ function addHeadExtras(model, B, o) {
 
   // sanggul: menempel di permukaan rambut belakang pada ketinggian o.bun.y (kelipatan jarak mata ke dagu)
   const ob = o.bun, by = ey + ob.y * h;
-  let back = box.min.z;
-  for (const m of hairs) {
-    const pos = m.geometry.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      m.getVertexPosition(i, v).applyMatrix4(m.matrixWorld);
-      if (Math.abs(v.x - cx) < 0.3 * sx && Math.abs(v.y - by) < 0.25 * h && v.z < back) back = v.z;
-    }
-  }
   const r = ob.size * sx, cv = document.createElement("canvas");                // tekstur helai rambut perak
   cv.width = 128; cv.height = 64;
   const c = cv.getContext("2d");
@@ -122,6 +126,7 @@ export async function loadChar(key) {
     for (const k in o.tint || {}) if (m.name.includes(k)) m.color.set(o.tint[k]);
     if ((o.grey || []).some((k) => m.name.includes(k)) && m.map) { m.map = greyTex(m.map); m.color.set("#ffffff"); }
   });
+  mergeByMaterial(model);
   const box = new THREE.Box3().setFromObject(model), s = o.height / (box.max.y - box.min.y);
   const root = new THREE.Group(), pivot = new THREE.Group();
   pivot.rotation.y = Math.PI;                       // model VRM menghadap -Z, permainan memakai +Z sebagai depan
@@ -138,7 +143,7 @@ export async function loadChar(key) {
       w[mo.blink] = closed ? 1 : 0;
     }
   };
-  if (o.glasses || o.bun) { root.updateMatrixWorld(true); addHeadExtras(model, B, o); }
+  if (o.glasses || o.bun) { root.updateMatrixWorld(true); addHeadExtras(B, o); }
 
   for (const k of ["L_UpperArm", "R_UpperArm"]) B[k].rotation.order = "XZY";   // turunkan lengan dulu, lalu ayun
   const hipY = B.C_Hips.position.y, hunch = o.hunch || 0;

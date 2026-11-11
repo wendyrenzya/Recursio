@@ -10,4 +10,4 @@ lisensi CC0, penggunaan komersial diizinkan, dan boleh dipakai siapa saja.
 | ibu.glb | Vivi |
 | nenek.glb | Darkness Shibu (rambut diubah menjadi abu-abu) |
 
-Sumber file: https://github.com/madjin/vrm-samples (folder vroid/beta). Tekstur dikecilkan ke 1024 px dan diubah ke WebP.
+Sumber file: https://github.com/madjin/vrm-samples (folder vroid/beta). Tekstur dikecilkan ke 512 px dan diubah ke WebP, geometri dikompres dengan meshopt.
