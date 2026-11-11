@@ -20,7 +20,7 @@
 <div id="bar"><span id="who"></span><button id="walk">Jalan</button><button id="spin">Putar</button></div>
 <script type="module">
 import * as THREE from "./lib/three.module.min.js";
-import { buildChar, CHAR_KEYS, charName } from "./chars3d.js";
+import { loadChar, CHAR_KEYS, charName } from "./chars3d.js";
 
 const canvas = document.getElementById("gl");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -44,7 +44,8 @@ const floor = new THREE.Mesh(new THREE.CircleGeometry(12, 48), new THREE.ShadowM
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 
 // satu karakter tampil besar setinggi mata, dipilih lewat tombol nama
-const actors = CHAR_KEYS.map((k) => { const a = buildChar(k); scene.add(a.root); return a; });
+const actors = await Promise.all(CHAR_KEYS.map(loadChar));
+for (const a of actors) scene.add(a.root);
 const state = { walk: false, spin: true, yaw: 0.35, cur: 0 };
 const bWalk = document.getElementById("walk"), bSpin = document.getElementById("spin"), who = document.getElementById("who");
 who.style.display = "contents";
