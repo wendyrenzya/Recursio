@@ -13,7 +13,7 @@ import { mergeGeometries } from "./lib/BufferGeometryUtils.js";
 // face: ekspresi tetap (nama morf: bobot); glasses: kacamata bulat; bun: sanggul (y tinggi dari mata, size, warna)
 const M10 = { blink: 10, eyeJoy: 13, mthFun: 29, brwSorrow: 6 }, M12 = { blink: 12, eyeJoy: 15, mthFun: 25, brwSorrow: 8 };
 const CHARS = {
-  nino: { name: "Nino", height: 1.6, tint: { Tops: "#ff8f2e" }, morph: M10 },
+  nino: { name: "Nino", height: 1.6, tint: { Tops: "#f06a1c" }, morph: M10 },
   kael: { name: "Kael", height: 1.66, morph: M10 },
   ibu: { name: "Ibu Nino", height: 1.6, morph: M12, tint: { Tops: "#d6c2ae", Shoes: "#8a6a58", EyeIris: "#a07c5c" },
     face: { eyeJoy: 0.2, mthFun: 0.3 } },

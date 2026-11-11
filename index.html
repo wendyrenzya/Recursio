@@ -16,6 +16,7 @@
 <div id="wrap"><canvas id="gl"></canvas><canvas id="ui" width="180" height="320"></canvas></div>
 <script type="module">
 import * as THREE from "./lib/three.module.min.js";
+import { loadChar } from "./chars3d.js";
 
 // ================================================================ dasar
 // Logika memakai satuan piksel tile 16. Dunia 3D memakai 1 unit = 1 tile.
@@ -403,212 +404,6 @@ function roofCanvas(style) {
   return cv;
 }
 
-// ================================================================ karakter 32 x 48, proporsi Octopath (sekitar 3 kepala)
-// Dibangun dari bentuk dengan mesin Pix: tiap bagian punya shading sabit sendiri, lalu outline berwarna.
-const CW = 32, CH = 48;
-const inRamp = (p, i, r) => r.includes(p.col[i]);
-function motif(p, ramp, y0, y1, fn) {               // pola kain: hanya di piksel yang berwarna kain itu
-  for (let y = y0; y < y1; y++) for (let x = 0; x < CW; x++) {
-    const i = y * CW + x;
-    if (!inRamp(p, i, ramp)) continue;
-    const c = fn(x, y);
-    if (c) p.col[i] = c;
-  }
-}
-function face(p, o, xs, hy, side) {
-  for (const x of xs) {
-    p.rect(o.hair[2], x, hy - 1, 2, 1);                                   // alis
-    if (o.sleepy) { p.rect("#2a1e30", x, hy + 1, 2, 1); p.dot(o.skin[2], x, hy); }
-    else { p.rect("#2a1e30", x, hy, 1, 2); p.dot("#ffffff", x + 1, hy + 1); p.dot(o.eye || "#5a3a2a", x, hy + 1); }
-  }
-  const mx = side ? xs[0] - 1 : 15;
-  p.rect(dark(o.skin[0], 0.72), mx, hy + 4, 2, 1);                          // mulut
-  if (!side) { p.dot(o.skin[2], 16, hy + 2); }                             // bayang hidung
-  for (const bx of side ? [xs[0] + 1] : [xs[0] - 1, xs[1] + 2]) p.dot(o.blush || "#f0a090", bx, hy + 3);
-}
-
-function composeChar(o, dir, frame) {
-  const p = new Pix(CW, CH);
-  // frame: 0 diam, 1 langkah A, 2 lewat, 3 langkah B, 4 lewat. Badan naik 1 piksel saat pose lewat.
-  const bob = frame === 2 || frame === 4 ? 1 : 0, side = dir === "left", back = dir === "up";
-  const st = frame === 1 ? 1 : frame === 3 ? -1 : 0;
-  const S = o.skin, T = o.top, Pn = o.pants, Sh = o.shoe;
-  // kaki atau kain panjang
-  if (o.skirt) {
-    const hem = 44 - bob;
-    p.shape(o.skirt, side ? poly([[12, 31 - bob], [21, 31 - bob], [22.5, hem], [10, hem]]) : poly([[11, 31 - bob], [21, 31 - bob], [23.5, hem], [8.5, hem]]), 1);
-    if (o.skirtFx) o.skirtFx(p, dir, bob);
-    const feet = side ? [[15 + st * 2, bob]] : [[13, frame === 3 ? 1 : 0], [19, frame === 1 ? 1 : 0]];
-    for (const [x, lift] of feet) { p.rect(S[2], x - 1, hem, 2, 2 - lift); p.shape(Sh, ell(x + (side ? -0.8 : 0), 46 - lift, 2.6, 1.4)); }
-  } else {
-    const legs = side ? [[16 - st * 3 + (frame === 2 ? 1 : 0), frame === 2 ? 2 : 0, true], [16 + st * 3 - (frame === 4 ? 1 : 0), frame === 4 ? 2 : 0, false]]
-                      : [[13.4, frame === 3 ? 2 : 0, false], [18.6, frame === 1 ? 2 : 0, false]];
-    for (const [x, lift, behind] of legs) {
-      p.shape(behind ? [Pn[2], Pn[0], Pn[2]] : Pn, rrect(x - 2.3, 31 - bob, 4.6, 13 - lift + bob, 1.5), 1);
-      if (o.cuff) p.rect(o.cuff, Math.round(x - 2), 42 - lift, 4, 1);
-      p.shape(behind ? [Sh[2], Sh[0], Sh[2]] : Sh, ell(x + (side ? -1 : 0), 45.2 - lift, side ? 3.4 : 2.8, 1.9), 1);
-      if (o.sole) p.rect(o.sole, Math.round(x - 2.6 + (side ? -1 : 0)), 46 - lift, 5, 1);
-    }
-  }
-  // badan
-  p.shape(T, side ? rrect(11.5, 19 - bob, 10, 14, 3) : rrect(9.5, 19 - bob, 13, 14, 3.5), 1);
-  if (o.torsoFx) o.torsoFx(p, dir, bob);
-  // lengan dan tangan
-  const A = o.sleeve || T;
-  if (side) {
-    p.shape(A, ell(16.5 + st * 1.2, 25.5 - bob, 2.4, 6.2, -st * 0.25), 1);
-    p.shape(S, ell(16.5 + st * 2.6, 31.6 - bob, 1.9, 1.9));
-  } else {
-    for (const [x, s] of [[8.7, st], [23.3, -st]]) {
-      p.shape(A, ell(x, 25.5 - bob + s * 0.6, 2.4, 6.4), 1);
-      p.shape(S, ell(x, 32 - bob + s * 0.6, 1.9, 1.9));
-    }
-  }
-  if (o.armFx) o.armFx(p, dir, bob, st);
-  // leher dan kepala
-  p.rect(S[2], 15, 16 - bob, 3, 4);
-  const hx = side ? 15 : 16, hy = 11 - bob + (o.hunch || 0);
-  p.shape(S, ell(hx, hy, side ? 6.4 : 6.6, 7), 1);
-  if (!back) {
-    if (side) { p.shape(S, ell(hx - 6.2, hy + 2, 1.3, 1.1)); face(p, o, [hx - 4], hy, true); }
-    else face(p, o, [hx - 3, hx + 2], hy, false);
-  }
-  o.hairFn(p, dir, hx, hy, o.hair);
-  if (o.extra) o.extra(p, dir, hx, hy, bob);
-  p.outline();
-  return p.canvas();
-}
-
-const rel = (hx, hy, pts) => pts.map(([x, y]) => [hx + x, hy + y]);
-const HAIR = {
-  spiky(p, dir, hx, hy, H) {
-    const spikes = [[[-6, -4], [-9, -9], [-2, -6]], [[-3, -7], [-3, -12], [2, -7]], [[1, -7], [5, -12], [5, -5]], [[4, -5], [9, -8], [7, -1]]];
-    if (dir === "up") {
-      p.shape(H, ell(hx, hy - 0.5, 7.2, 7.4), 1);
-      for (const s of spikes) p.shape(H, poly(rel(hx, hy, s)), 1);
-      for (const s of [[[-6, 3], [-4, 8], [-2, 3]], [[-2, 4], [0, 9], [2, 4]], [[2, 3], [4, 8], [6, 2]]]) p.shape(H, poly(rel(hx, hy, s)), 1);
-      return;
-    }
-    if (dir === "left") {
-      p.shape(H, all(clip(0, 0, CW, hy - 1, ell(hx + 1, hy - 1, 7.3, 7)), ell(hx + 3, hy + 1, 4.6, 6.4)), 1);
-      for (const s of spikes.slice(1)) p.shape(H, poly(rel(hx + 1, hy, s)), 1);
-      for (const s of [[[-6.5, -3], [-7, 2], [-3.5, -2]], [[-4, -3], [-3, 1.5], [-1, -3]], [[5, -2], [10, 1], [6, 4]]]) p.shape(H, poly(rel(hx, hy, s)), 1);
-    } else {
-      p.shape(H, clip(0, 0, CW, hy - 1, ell(hx, hy - 1, 7.4, 7)), 1);
-      for (const s of spikes) p.shape(H, poly(rel(hx, hy, s)), 1);
-      for (const s of [[[-7, -3], [-6.5, 3.5], [-4, -2]], [[-4.5, -3], [-3, 1.5], [-1, -3]], [[-1.5, -3], [0.5, 1], [2, -3]], [[1.5, -3], [3.5, 1.5], [5, -3]], [[4.5, -3], [6.8, 3.5], [7.4, -2]]])
-        p.shape(H, poly(rel(hx, hy, s)), 1);
-    }
-    p.shape([H[1]], ell(hx - 2.5, hy - 4.5, 2.4, 0.9, -0.3));
-  },
-  messy(p, dir, hx, hy, H) {
-    if (dir === "up") {
-      p.shape(H, ell(hx, hy - 0.3, 7.6, 7.6), 1);
-      for (const s of [[[-7, 1], [-6, 8], [-3, 3]], [[-3, 3], [-1, 9], [1, 3]], [[1, 3], [3, 9], [5, 2]], [[4, 1], [7, 7], [7.5, 0]]]) p.shape(H, poly(rel(hx, hy, s)), 1);
-      return;
-    }
-    if (dir === "left") {
-      p.shape(H, all(clip(0, 0, CW, hy, ell(hx + 1, hy - 1, 7.6, 7.4)), ell(hx + 3, hy + 1.5, 5, 7)), 1);
-      for (const s of [[[-6.5, -2], [-6.5, 1], [-4, -2]], [[-4.5, -3], [-2.5, 0], [-1, -3]], [[4, 2], [8, 7], [5, 7]]]) p.shape(H, poly(rel(hx, hy, s)), 1);
-    } else {
-      p.shape(H, clip(0, 0, CW, hy, ell(hx, hy - 1, 7.8, 7.4)), 1);
-      for (const s of [[[-7.6, -2], [-7, 5.5], [-5, -1]], [[-5.5, -3], [-4, 0], [-2, -3]], [[-2.5, -3], [-0.5, 0.5], [1.5, -3]], [[1, -3], [3, 0], [4.5, -3]], [[4.5, -2], [7, 5.5], [7.8, -2]]])
-        p.shape(H, poly(rel(hx, hy, s)), 1);
-    }
-    p.shape([H[1]], ell(hx - 2.5, hy - 4.5, 2.6, 0.9, -0.3));
-  },
-  bun(p, dir, hx, hy, H) {
-    if (dir === "up") { p.shape(H, ell(hx, hy - 0.5, 7, 7.2), 1); p.shape(H, ell(hx, hy - 6, 3.8, 3.2), 1); p.rect("#c89a40", hx - 4, hy - 7, 8, 1); return; }
-    if (dir === "left") {
-      p.shape(H, all(clip(0, 0, CW, hy - 1, ell(hx + 1, hy - 1, 7, 6.8)), ell(hx + 3, hy, 4.2, 5.6)), 1);
-      p.shape(H, ell(hx + 5, hy - 4.5, 3.4, 3.2), 1); p.rect("#c89a40", hx + 3, hy - 6, 6, 1);
-      p.shape(H, poly(rel(hx, hy, [[-6.5, -3], [-5.5, 1], [-2, -3]])), 1);
-    } else {
-      p.shape(H, ell(hx, hy - 7.5, 3.6, 3), 1); p.rect("#c89a40", hx - 4, hy - 8, 8, 1);
-      p.shape(H, clip(0, 0, CW, hy - 1, ell(hx, hy - 1, 7, 6.8)), 1);
-      p.shape(H, all(poly(rel(hx, hy, [[-7, -2], [-6.5, 3], [-2, -4.5]])), poly(rel(hx, hy, [[7, -2], [6.5, 3], [2, -4.5]]))), 1);
-    }
-    p.shape([H[1]], ell(hx - 2.5, hy - 4.5, 2.2, 0.8, -0.3));
-  },
-};
-
-const CHARS = {
-  nino: {
-    skin: ["#e8b088", "#f8d0aa", "#c08660"], hair: ["#3a3048", "#5e5478", "#221a2e"], hairFn: HAIR.spiky, eye: "#4a3a2a",
-    top: ["#e8722a", "#ffa050", "#b04e1c"], pants: ["#3a5a9a", "#5a7ab8", "#26406e"], shoe: ["#eeeef4", "#ffffff", "#b0b0c0"], sole: "#e8722a",
-    torsoFx(p, dir, bob) {
-      if (dir === "up") { p.rect("#ffffff", 15, 21 - bob, 2, 10); return; }
-      if (dir === "left") { p.rect("#2a3050", 11, 21 - bob, 2, 10); p.rect("#ffffff", 14, 20 - bob, 1, 11); return; }
-      p.shape(["#2a3050", "#3a4270"], rrect(14, 20 - bob, 4, 12, 1));   // kaos gelap di balik jaket terbuka
-      p.rect("#ffffff", 11, 20 - bob, 1, 11); p.rect("#ffffff", 20, 20 - bob, 1, 11);   // garis balap
-      p.shape(["#ffa050", "#ffc890"], all(poly([[12, 18 - bob], [15, 18 - bob], [14, 22 - bob]]), poly([[17, 18 - bob], [20, 18 - bob], [18, 22 - bob]])));   // kerah
-      p.rect("#3a2a24", 10, 31 - bob, 12, 1); p.dot("#f8d050", 16, 31 - bob);   // sabuk
-    },
-    armFx(p, dir, bob, st) { if (dir !== "left") { p.rect("#ffffff", 8, 22 - bob + st, 1, 6); p.rect("#ffffff", 23, 22 - bob - st, 1, 6); } else p.rect("#ffffff", 16 + st, 22 - bob, 1, 6); },
-    extra(p, dir, hx, hy) { if (dir === "down") { p.dot("#f8e4cc", hx + 7, hy + 1); p.dot("#f8e4cc", hx + 7, hy + 2); } },
-  },
-  kael: {
-    skin: ["#f2c69c", "#ffe2c4", "#cc9a74"], hair: ["#7a4e32", "#a87450", "#4e301e"], hairFn: HAIR.messy, sleepy: true,
-    top: ["#8a96aa", "#aab6c8", "#646e84"], pants: ["#4a4a5c", "#62627a", "#34343e"], shoe: ["#5a5a70", "#7a7a94", "#3e3e4e"], cuff: "#34343e",
-    torsoFx(p, dir, bob) {
-      p.rect("#646e84", dir === "left" ? 12 : 10, 31 - bob, dir === "left" ? 9 : 12, 1);   // ujung hoodie
-      if (dir === "up") { p.shape(["#7a8698", "#9aa6b8", "#5a6478"], ell(16, 21 - bob, 5.5, 3.5)); return; }   // tudung di punggung
-      if (dir === "left") { p.shape(["#7a8698", "#9aa6b8"], ell(19, 20 - bob, 3, 2.5)); return; }
-      p.shape(["#7a8698", "#9aa6b8", "#5a6478"], rrect(11.5, 26 - bob, 9, 4, 1.5));   // kantong
-      p.rect("#ffffff", 14, 20 - bob, 1, 4); p.rect("#ffffff", 18, 20 - bob, 1, 4);   // tali hoodie
-    },
-    extra(p, dir, hx, hy, bob) {   // headset di leher
-      if (dir === "up") { p.rect("#2a2a38", 11, 18 - bob, 10, 1); return; }
-      if (dir === "left") { p.shape(["#2a2a38", "#4a4a5a"], ell(18, 18.5 - bob, 2.4, 2)); p.dot("#40f0d8", 18, 18 - bob); return; }
-      p.rect("#2a2a38", 12, 18 - bob, 8, 1);
-      for (const x of [10.5, 21.5]) { p.shape(["#2a2a38", "#4a4a5a"], ell(x, 19 - bob, 2.4, 2.2)); p.dot("#40f0d8", Math.round(x), 19 - bob); }
-    },
-  },
-  ibu: {
-    skin: ["#dca07a", "#f2c4a0", "#b47a56"], hair: ["#2e2430", "#504258", "#1a141e"], hairFn: HAIR.bun, eye: "#3a2a20",
-    top: ["#c8405e", "#e86a86", "#962c46"], skirt: ["#c8405e", "#e86a86", "#962c46"], shoe: ["#8a5a3a", "#b07a52", "#5e3a22"],
-    torsoFx(p, dir, bob) {
-      if (dir === "down") p.shape(["#dca07a", "#f2c4a0"], poly([[14, 19 - bob], [18, 19 - bob], [16, 22 - bob]]));   // garis leher
-      const R = ["#c8405e", "#e86a86", "#962c46"];
-      motif(p, R, 19, 45, (x, y) => ((x + (Math.floor(y / 4) % 2) * 2) % 4 === 0 && y % 4 === 0 ? "#ffd870" : (x % 4 === 1 && y % 4 === 2 ? "#7a1e34" : null)));
-    },
-    extra(p, dir, hx, hy) { if (dir === "down") { p.dot("#ffd040", hx - 7, hy + 3); p.dot("#ffd040", hx + 7, hy + 3); } },
-  },
-  nenek: {
-    skin: ["#dca482", "#f2c8a6", "#b47e5a"], hair: ["#c4c4d4", "#ececf6", "#8a8aa2"], hairFn: HAIR.bun, hunch: 1, eye: "#3a2a20",
-    top: ["#78b090", "#9ccdb0", "#4e8466"], skirt: ["#7a4e2e", "#9a6a42", "#56341c"], shoe: ["#6a4a3a", "#8a6a52", "#4a3022"],
-    torsoFx(p, dir, bob) {
-      p.rect("#ffffff", dir === "left" ? 12 : 10, 31 - bob, dir === "left" ? 9 : 12, 1);   // renda kebaya
-      if (dir === "down") { p.shape(["#ffd040", "#fff0a0"], ell(16, 22 - bob, 1.4, 1.2)); p.rect("#4e8466", 16, 23 - bob, 1, 8); }   // bros dan belahan
-    },
-    skirtFx(p, dir, bob) {
-      const R = ["#7a4e2e", "#9a6a42", "#56341c"];
-      motif(p, R, 31, 46, (x, y) => ((y + bob) % 5 === 0 ? "#d8a850" : ((x + y) % 6 === 0 ? "#3e2412" : null)));
-    },
-    extra(p, dir, hx, hy) {
-      if (dir === "up") return;
-      const xs = dir === "left" ? [hx - 4] : [hx - 3, hx + 2];
-      for (const x of xs) { p.rect("#6a4a3a", x - 1, hy - 1, 4, 1); p.rect("#6a4a3a", x - 1, hy + 2, 4, 1); p.dot("#6a4a3a", x - 1, hy); p.dot("#6a4a3a", x - 1, hy + 1); p.dot("#6a4a3a", x + 2, hy); p.dot("#6a4a3a", x + 2, hy + 1); }
-      if (xs.length > 1) p.rect("#6a4a3a", hx, hy, 1, 1);
-    },
-  },
-};
-
-// Satu lembar 640 x 48: arah bawah, atas, kiri, kanan, masing-masing 5 frame
-const DIRS = ["down", "up", "left", "right"];
-function makeSheet(o) {
-  const cv = mk(CW * 20, CH), c = cv.getContext("2d");
-  for (let f = 0; f < 5; f++) {
-    c.drawImage(composeChar(o, "down", f), f * CW, 0);
-    c.drawImage(composeChar(o, "up", f), (5 + f) * CW, 0);
-    const l = composeChar(o, "left", f);
-    c.drawImage(l, (10 + f) * CW, 0);
-    c.save(); c.translate((15 + f) * CW + CW, 0); c.scale(-1, 1); c.drawImage(l, 0, 0); c.restore();
-  }
-  return cv;
-}
-
-
 // ================================================================ keadaan permainan
 const NPCS = [
   { name: "Ibu Nino", tx: 6, ty: 8, char: "ibu", dir: "down",
@@ -627,7 +422,8 @@ const NPCS = [
 const npcAt = (x, y) => NPCS.find((n) => n.tx === x && n.ty === y);
 const walkable = (x, y) => baseWalkable(x, y) && !npcAt(x, y);
 
-const player = { tx: 9, ty: 3, x: 9 * TS, y: 3 * TS, path: [], dir: "down", walk: 0 };
+const player = { tx: 9, ty: 3, x: 9 * TS, y: 3 * TS, path: [], dir: "down", walk: 0, yaw: 0 };
+const DIR_YAW = { down: 0, up: Math.PI, left: -Math.PI / 2, right: Math.PI / 2 };   // arah hadap model 3D
 const target = { x: -1, y: -1 };
 const cam = { x: 0, z: 0 };                      // titik fokus kamera dalam satuan tile
 const dlg = { npc: null, line: 0, shown: 0 };   // npc null berarti dialog tertutup
@@ -641,6 +437,7 @@ function openDialog(n) {
   dlg.npc = n; dlg.line = 0; dlg.shown = 0;
   n.dir = dirTo(player.tx - n.tx, player.ty - n.ty);
   player.dir = dirTo(n.tx - player.tx, n.ty - player.ty);
+  player.yaw = DIR_YAW[player.dir];
   pending = null; target.x = -1;
 }
 function advanceDialog() {
@@ -719,6 +516,7 @@ function update(dt) {
     const dx = gx - player.x, dy = gy - player.y, dist = Math.hypot(dx, dy);
     if (dist < 1e-6) { player.path.shift(); continue; }
     faceTo(dx, dy);
+    player.yaw = Math.atan2(dx, dy);
     moved = true;
     if (move >= dist) {
       player.x = gx; player.y = gy; move -= dist; player.walk += dist; player.path.shift();
@@ -1048,7 +846,7 @@ const flyMat = new THREE.ShaderMaterial({
 });
 scene.add(new THREE.Points(flyGeo, flyMat));
 
-// karakter: billboard dengan lembar sprite, bayangan kontak lembut di kaki
+// karakter: model 3D dari chars3d.js, bayangan kontak lembut di kaki
 const contactTex = (() => {
   const cv = mk(32, 32), c = cv.getContext("2d");
   const g = c.createRadialGradient(16, 16, 0, 16, 16, 16);
@@ -1056,24 +854,26 @@ const contactTex = (() => {
   c.fillStyle = g; c.fillRect(0, 0, 32, 32);
   return new THREE.CanvasTexture(cv);
 })();
-const charGeo = billboardGeo(CW / 24, CH / 24);
-function makeActor(charKey) {
-  const tex = pix(makeSheet(CHARS[charKey]));
-  tex.repeat.set(1 / 20, 1);
-  const mesh = new THREE.Mesh(charGeo, spriteMat(tex));
-  mesh.castShadow = true;
-  const blob = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.5), new THREE.MeshBasicMaterial({ map: contactTex, transparent: true, depthWrite: false }));
+const CHAR_SCALE = 1.35;                         // model setinggi 1,5 sampai 1,7; dibesarkan sedikit agar terbaca di layar HP
+async function makeActor(charKey) {
+  const c = await loadChar(charKey);
+  c.root.scale.setScalar(CHAR_SCALE);
+  const hit = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1.55, 8), new THREE.MeshBasicMaterial({ visible: false }));
+  hit.position.y = 0.775; c.root.add(hit);       // sasaran tap yang tidak terlihat, setinggi badan (tidak lebih, agar tap di belakangnya tidak kena)
+  const blob = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.55), new THREE.MeshBasicMaterial({ map: contactTex, transparent: true, depthWrite: false }));
   blob.rotation.x = -Math.PI / 2;
-  scene.add(mesh, blob);
-  return { mesh, tex, blob };
+  scene.add(c.root, blob);
+  return { ...c, hit, blob, yaw: 0, x: null, z: null };
 }
-const playerActor = makeActor("nino");
-for (const n of NPCS) n.actor = makeActor(n.char);
-function placeActor(a, x, z, dir, walk) {
-  const f = walk > 0 ? 1 + Math.floor(walk / 5.5) % 4 : 0;   // satu pose tiap 5,5 piksel agar kaki tidak meluncur
-  a.tex.offset.x = (DIRS.indexOf(dir) * 5 + f) / 20;
-  a.mesh.position.set(x, 0, z);
-  a.blob.position.set(x, 0.02, z + 0.05);
+// yaw: arah hadap tujuan, diputar halus lewat sudut terpendek. Langkah kaki mengikuti jarak tempuh.
+function placeActor(a, x, z, yaw, dt, moving) {
+  const dist = a.x === null ? 0 : Math.hypot(x - a.x, z - a.z);
+  a.x = x; a.z = z;
+  const d = Math.atan2(Math.sin(yaw - a.yaw), Math.cos(yaw - a.yaw));
+  a.yaw += d * Math.min(1, dt * 12);
+  a.root.position.set(x, 0, z); a.root.rotation.y = a.yaw;
+  a.update(dt, dist / CHAR_SCALE, moving);
+  a.blob.position.set(x, 0.02, z);
 }
 
 // penanda tujuan tap
@@ -1149,6 +949,11 @@ function fit() {
 addEventListener("resize", fit);
 fit();
 
+// model karakter dimuat setelah ukuran layar siap, sebelum input dan putaran permainan berjalan
+drawText(ctx, "Memuat...", Math.round((VW - textW("Memuat...")) / 2), 156, "#f4f4ff", "#0b0d24");   // tampil selama model karakter dimuat
+const [playerActor, ...npcActors] = await Promise.all(["nino", ...NPCS.map((n) => n.char)].map(makeActor));
+NPCS.forEach((n, i) => { n.actor = npcActors[i]; });
+
 function placeCamera() {
   camera.position.set(cam.x, DIST * Math.sin(PITCH), cam.z + DIST * Math.cos(PITCH));
   camera.lookAt(cam.x, 0, cam.z);
@@ -1158,11 +963,11 @@ function placeCamera() {
 }
 
 // ================================================================ render
-function render(now) {
+function render(now, dt) {
   const t = now / 1000;
   placeCamera();
-  placeActor(playerActor, player.x / TS + 0.5, player.y / TS + 0.5, player.dir, player.walk);
-  for (const n of NPCS) placeActor(n.actor, n.tx + 0.5, n.ty + 0.5, n.dir, 0);
+  placeActor(playerActor, player.x / TS + 0.5, player.y / TS + 0.5, player.yaw, dt, player.walk > 0);
+  for (const n of NPCS) placeActor(n.actor, n.tx + 0.5, n.ty + 0.5, DIR_YAW[n.dir], dt, false);
   marker.visible = target.x >= 0;
   if (marker.visible) { marker.position.set(target.x + 0.5, 0.03, target.y + 0.5); marker.material.opacity = 0.55 + 0.45 * Math.sin(t * 8); }
   waterMat.uniforms.uTime.value = t; flyMat.uniforms.uTime.value = t;
@@ -1229,9 +1034,9 @@ glCanvas.addEventListener("pointerdown", (e) => {
   const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   placeCamera();
   ray.setFromCamera(ndc, camera);
-  const hitNpc = ray.intersectObjects(NPCS.map((n) => n.actor.mesh))[0];
+  const hitNpc = ray.intersectObjects(NPCS.map((n) => n.actor.hit))[0];
   let tx, ty;
-  if (hitNpc) { const n = NPCS.find((q) => q.actor.mesh === hitNpc.object); tx = n.tx; ty = n.ty; }
+  if (hitNpc) { const n = NPCS.find((q) => q.actor.hit === hitNpc.object); tx = n.tx; ty = n.ty; }
   else {
     const p = ray.ray.intersectPlane(groundPlane, new THREE.Vector3());
     if (!p) return;
@@ -1264,7 +1069,7 @@ function frame(now) {
   last = now;
   update(dt);
   updateCamera();
-  render(now);
+  render(now, dt);
   requestAnimationFrame(frame);
 }
 updateCamera();
@@ -1277,7 +1082,7 @@ function tileToScreen(tx, ty) {
   const r = glCanvas.getBoundingClientRect();
   return { x: r.left + (p.x * 0.5 + 0.5) * r.width, y: r.top + (-p.y * 0.5 + 0.5) * r.height, left: r.left, top: r.top, w: r.width, h: r.height };
 }
-window.__recursio = { VW, VH, TS, MW, MH, map, player, cam, target, dlg, NPCS, CHARS, CAM_BOUNDS, tileToScreen, makeSheet };
+window.__recursio = { VW, VH, TS, MW, MH, map, player, cam, target, dlg, NPCS, CAM_BOUNDS, tileToScreen, playerActor };
 </script>
 </body>
 </html>
