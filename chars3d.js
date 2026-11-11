@@ -142,23 +142,26 @@ function buildArm(torso, side, o) {
 
 // kepala dipahat, bukan bola polos: tempurung bulat, wajah bagian bawah pendek dan lebar di pipi, dagu kecil,
 // hidung menonjol, rongga mata sedikit masuk, pipi menggembung. Fungsi yang sama dipakai untuk tempelan wajah.
-const YK = 0.88, WK = 0.15, EYE_Y = -0.07, NOSE_Y = -0.14, MOUTH_Y = -0.19;
+const CHIN = 0.255, YK = CHIN / R, EYE_Y = -0.07, NOSE_Y = -0.13, MOUTH_Y = -0.172;
+// setengah lebar rahang pada kedalaman t (0 = garis mata, 1 = ujung dagu): pipi penuh, lalu garis lurus menyempit ke dagu runcing
 const sm = (v) => { const t = Math.max(0, Math.min(1, v)); return t * t * (3 - 2 * t); };
-const wide = (ys) => 1 + WK * sm(-ys / R / 0.45);
+const jawW = (t) => { const b = sm((t - 0.15) / 0.4); return R * (Math.sqrt(Math.max(0, 1 - t * t)) * (1 - b) + (0.954 - 1.02 * (t - 0.3)) * b) * Math.sqrt(Math.max(0, 1 - Math.max(0, (t - 0.72) / 0.28) ** 2.5)); };   // ujung dagu membulat
+const wide = (ys) => { const t = Math.min(0.98, Math.max(0, -ys / R)); return jawW(t) / (R * Math.sqrt(1 - t * t)); };
 function shapeHead(g, k = 1) {
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
     let x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    const s = sm(-y / R / 0.45);
-    x *= (1 + WK * s * (z > 0 ? 1 : 0.35)) * (1 - 0.42 * sm((-y / R - 0.5) / 0.5));   // pipi lebar, lalu menyempit ke dagu
-    if (y < 0) y *= YK;
-    if (z > 0) z = z * (1 - 0.06 * s) + 0.02 * s;
+    if (y < 0) {
+      const t = Math.min(1, -y / R), f = jawW(t) / Math.max(1e-4, R * Math.sqrt(1 - t * t));
+      x *= f; z = z * f + 0.2 * t ** 1.25;                    // rahang berbentuk V, dagu maju ke depan
+      y *= 1 - (1 - YK) * sm(t / 0.3);
+    }
     if (z > 0.08) {
       const G = (cx, cy, sg) => Math.exp(-((x - cx) ** 2 + (y - cy) ** 2) / (sg * sg));
-      z += 0.024 * G(0, NOSE_Y, 0.026) + 0.02 * G(0, -0.238, 0.04)                     // hidung, dagu
-        - 0.015 * (G(0.114, EYE_Y, 0.062) + G(-0.114, EYE_Y, 0.062))                     // rongga mata
-        + 0.014 * (G(0.175, -0.16, 0.06) + G(-0.175, -0.16, 0.06))                     // pipi
-        - 0.005 * G(0, MOUTH_Y, 0.03);
+      z += 0.022 * G(0, NOSE_Y, 0.026) + 0.008 * G(0, -0.232, 0.035)                      // hidung, dagu
+        - 0.007 * (G(0.114, EYE_Y, 0.07) + G(-0.114, EYE_Y, 0.07))                     // rongga mata
+        + 0.005 * (G(0.135, -0.14, 0.06) + G(-0.135, -0.14, 0.06))                        // pipi
+        - 0.004 * G(0, MOUTH_Y, 0.03);
     }
     p.setXYZ(i, x * k, y * k, z * k);
   }
@@ -178,13 +181,13 @@ function fp(x, y) {
 function faceTex(o, closed) {
   const cv = document.createElement("canvas"); cv.width = FW; cv.height = FH;
   const c = cv.getContext("2d");
-  const ex = o.eyeX || 0.114, ey = EYE_Y, rx = (o.eyeW || 0.052) / 1.1 * S, ry = (o.eyeH || 0.068) / YK * S, ink = "#2b1a20";
+  const ex = o.eyeX || 0.114, ey = EYE_Y, rx = (o.eyeW || 0.052) * S, ry = (o.eyeH || 0.068) / YK * S, ink = "#2b1a20";
   c.lineCap = "round"; c.lineJoin = "round";
   const fs = c.createLinearGradient(0, FH * 0.1, 0, FH * 0.44);                  // bayangan poni di dahi
   fs.addColorStop(0, "rgba(190,110,90,0.26)"); fs.addColorStop(1, "rgba(170,90,80,0)");
   c.fillStyle = fs; c.fillRect(0, 0, FW, FH * 0.44);
   for (const s of [-1, 1]) {
-    const [bx, by] = fp(s * 0.18, ey - 0.085), br = 0.055 * S;                 // pipi merona
+    const [bx, by] = fp(s * 0.14, ey - 0.08), br = 0.045 * S;                 // pipi merona
     const bl = c.createRadialGradient(bx, by, 0, bx, by, br);
     bl.addColorStop(0, "rgba(242,120,110,0.5)"); bl.addColorStop(1, "rgba(242,120,110,0)");
     c.fillStyle = bl; c.fillRect(bx - br, by - br, br * 2, br * 2);
@@ -242,7 +245,7 @@ function faceTex(o, closed) {
   c.stroke();
   const [nx, ny] = fp(0, NOSE_Y - 0.016);                                        // bayangan di bawah hidung
   const ns = c.createRadialGradient(nx, ny, 0, nx, ny, 26);
-  ns.addColorStop(0, "rgba(190,100,80,0.45)"); ns.addColorStop(1, "rgba(190,100,80,0)");
+  ns.addColorStop(0, "rgba(190,100,80,0.28)"); ns.addColorStop(1, "rgba(190,100,80,0)");
   c.fillStyle = ns; c.fillRect(nx - 26, ny - 14, 52, 40);
   if (o.wrinkle) {                                                              // garis senyum nenek
     c.strokeStyle = "rgba(140,84,60,0.5)"; c.lineWidth = 4;
@@ -476,9 +479,9 @@ export function buildChar(key) {
   add(hips, loft([[-0.075, 0.12, 0.105], [-0.03, 0.16, 0.135], [0.04, 0.156, 0.13]]), o.dress ? o.skin : o.pants);   // panggul
   add(torso, loft(o.torso || TORSO), o.body());
   if (o.dress) add(hips, loft(SKIRT, false, true), o.dress());
-  add(torso, loft([[0.3, 0.05, 0.05], [0.39, 0.046, 0.046]], false, false), o.skin);                               // leher
+  add(torso, loft([[0.3, 0.046, 0.046], [0.46, 0.04, 0.04]], false, false), o.skin);                               // leher
   torso.rotation.x = o.hunch || 0;
-  head.position.set(0, 0.565, 0.012);
+  head.position.set(0, 0.615, 0.0);
   head.scale.setScalar(0.9);
   head.rotation.x = -(o.hunch || 0) * 0.8;
   const setEyes = buildHead(head, o);
