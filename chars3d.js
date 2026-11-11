@@ -1,51 +1,55 @@
-// chars3d.js | karakter 3D chibi Recursio dari model jadi buatan artis
+// chars3d.js | karakter 3D Recursio dari model jadi buatan artis
 // Model: contoh resmi VRoid Studio (pixiv), lisensi CC0 tertulis di metadata tiap file. Lihat models/LISENSI.md.
-// Yang dikerjakan di sini: memuat model, mengubah proporsi ke chibi lewat skala tulang, mewarnai ulang pakaian,
+// Proporsi model dibiarkan asli. Yang dikerjakan di sini: memuat model, mewarnai ulang pakaian dan rambut,
 // dan menggerakkan jalan, napas, serta kedip.
 import * as THREE from "./lib/three.module.min.js";
 import { GLTFLoader } from "./lib/GLTFLoader.js";
 
 // tint: warna pengali untuk bahan yang namanya mengandung kata kunci
+// grey: bahan yang teksturnya diubah menjadi abu-abu terang (rambut beruban)
 const CHARS = {
-  nino: { name: "Nino", height: 1.5, tint: { Tops: "#ff8f2e" } },
-  kael: { name: "Kael", height: 1.55 },
-  ibu: { name: "Ibu Nino", height: 1.6 },
-  nenek: { name: "Nenek Kael", height: 1.42 },
+  nino: { name: "Nino", height: 1.6, tint: { Tops: "#ff8f2e" } },
+  kael: { name: "Kael", height: 1.66 },
+  ibu: { name: "Ibu Nino", height: 1.58 },
+  nenek: { name: "Nenek Kael", height: 1.46, grey: ["Hair", "FaceBrow"], hunch: 0.2 },
 };
 export const CHAR_KEYS = Object.keys(CHARS);
 export const charName = (key) => CHARS[key].name;
 
-// proporsi chibi: kepala besar, badan dan kaki pendek, tangan dan kaki sedikit dibesarkan lagi
-// skala per sumbu supaya anggota badan memendek tanpa menjadi kurus; tangan, kaki, dan kepala mengimbangi skala induknya
-const HEAD = 2.0, LEG = 0.5, ARM = 0.62, SPINE = [1.08, 0.8, 1.08];
-const CHIBI = {
-  C_Spine: SPINE, C_Head: [HEAD / SPINE[0], HEAD / SPINE[1], HEAD / SPINE[2]],
-  L_UpperLeg: [1.05, LEG, 1.05], R_UpperLeg: [1.05, LEG, 1.05], L_Foot: [1.1, 1.1 / LEG, 1.1], R_Foot: [1.1, 1.1 / LEG, 1.1],
-  L_UpperArm: [ARM, 1, 1], R_UpperArm: [ARM, 1, 1], L_Hand: [1.15 / ARM, 1.15, 1.15], R_Hand: [1.15 / ARM, 1.15, 1.15],
-};
 const loader = new GLTFLoader();
+
+// salin tekstur ke kanvas dan ubah tiap piksel menjadi abu-abu terang, alfa dipertahankan
+function greyTex(map) {
+  const img = map.image, cv = document.createElement("canvas"); cv.width = img.width; cv.height = img.height;
+  const c = cv.getContext("2d"); c.drawImage(img, 0, 0);
+  const d = c.getImageData(0, 0, cv.width, cv.height), p = d.data;
+  for (let i = 0; i < p.length; i += 4) {
+    const l = (0.3 * p[i] + 0.59 * p[i + 1] + 0.11 * p[i + 2]) / 255, v = 150 + 100 * Math.min(1, l * 1.6);
+    p[i] = v * 0.97; p[i + 1] = v * 0.97; p[i + 2] = v;
+  }
+  c.putImageData(d, 0, 0);
+  const t = new THREE.CanvasTexture(cv);
+  t.flipY = map.flipY; t.colorSpace = map.colorSpace; t.wrapS = map.wrapS; t.wrapT = map.wrapT; t.channel = map.channel;
+  return t;
+}
 
 export async function loadChar(key) {
   const o = CHARS[key], gltf = await loader.loadAsync(`./models/${key}.glb`), model = gltf.scene;
-  const B = {};
+  const B = {}, done = new Set();
   model.traverse((n) => {
     if (n.isBone) B[n.name.replace("J_Bip_", "")] = n;
-    if (n.isMesh) {
-      n.frustumCulled = false; n.castShadow = true;
-      for (const k in o.tint || {}) if (n.material.name.includes(k)) n.material.color.set(o.tint[k]);
-    }
+    if (!n.isMesh) return;
+    n.frustumCulled = false; n.castShadow = true;
+    const m = n.material;
+    if (done.has(m)) return;
+    done.add(m);
+    for (const k in o.tint || {}) if (m.name.includes(k)) m.color.set(o.tint[k]);
+    if ((o.grey || []).some((k) => m.name.includes(k)) && m.map) { m.map = greyTex(m.map); m.color.set("#ffffff"); }
   });
-  // tinggi asli, lalu proporsi chibi
-  model.updateMatrixWorld(true);
-  const wy = (b) => b.getWorldPosition(new THREE.Vector3()).y;
-  const top0 = new THREE.Box3().setFromObject(model).max.y, headY0 = wy(B.C_Head);
-  for (const k in CHIBI) B[k].scale.set(...CHIBI[k]);
-  model.updateMatrixWorld(true);
-  const floor = Math.min(wy(B.L_ToeBase), wy(B.R_ToeBase)) - 0.03, top = wy(B.C_Head) + (top0 - headY0) * HEAD;
-  const s = o.height / (top - floor);
+  const box = new THREE.Box3().setFromObject(model), s = o.height / (box.max.y - box.min.y);
   const root = new THREE.Group(), pivot = new THREE.Group();
   pivot.rotation.y = Math.PI;                       // model VRM menghadap -Z, permainan memakai +Z sebagai depan
-  pivot.scale.setScalar(s); pivot.position.y = -floor * s;
+  pivot.scale.setScalar(s); pivot.position.y = -box.min.y * s;
   pivot.add(model); root.add(pivot);
 
   // kedip: cari target morf "Blink" dari data VRM
@@ -57,27 +61,28 @@ export async function loadChar(key) {
   model.traverse((n) => { if (n.isMesh && n.morphTargetInfluences && blinkIdx >= 0 && blinkIdx < n.morphTargetInfluences.length) faces.push(n); });
 
   for (const k of ["L_UpperArm", "R_UpperArm"]) B[k].rotation.order = "XZY";   // turunkan lengan dulu, lalu ayun
-  const hipY = B.C_Hips.position.y;
+  const hipY = B.C_Hips.position.y, hunch = o.hunch || 0;
   const st = { phase: 0, blink: 1 + Math.random() * 3, t: Math.random() * 10, walk: 0 };
-  const STRIDE = 0.9;
+  const STRIDE = 1.1 * (1 - hunch);
   // dist: jarak tempuh frame ini (satuan tile). moving: sedang berjalan.
   function update(dt, dist = 0, moving = false) {
     st.t += dt;
     st.walk += ((moving ? 1 : 0) - st.walk) * Math.min(1, dt * 10);
     st.phase += dist / STRIDE;
-    const w = st.walk, p = st.phase * Math.PI * 2;
+    const w = st.walk * (1 - hunch), p = st.phase * Math.PI * 2;
     for (const [sd, side] of [["L", 1], ["R", -1]]) {
       const ph = p + (side > 0 ? 0 : Math.PI), sw = Math.sin(ph);
-      B[sd + "_UpperLeg"].rotation.x = sw * 0.7 * w;
-      B[sd + "_LowerLeg"].rotation.x = -(0.08 + Math.max(0, Math.cos(ph)) * 0.45) * w;     // lutut menekuk sedikit saat kaki diayun ke depan
-      B[sd + "_Foot"].rotation.x = -sw * 0.2 * w;
+      B[sd + "_UpperLeg"].rotation.x = (sw * 0.5 + 0.08) * w;
+      B[sd + "_LowerLeg"].rotation.x = -(0.1 + Math.max(0, Math.cos(ph)) * 0.9) * w;       // lutut menekuk saat kaki diayun ke depan
+      B[sd + "_Foot"].rotation.x = -sw * 0.15 * w;
       B[sd + "_UpperArm"].rotation.z = side * (1.3 + Math.sin(st.t * 1.6) * 0.012);
-      B[sd + "_UpperArm"].rotation.x = -sw * 0.5 * w;
-      B[sd + "_LowerArm"].rotation.y = -side * (0.1 + (0.12 + Math.max(0, -sw) * 0.3) * w);
+      B[sd + "_UpperArm"].rotation.x = -sw * 0.45 * w;
+      B[sd + "_LowerArm"].rotation.y = -side * (0.12 + hunch + (0.2 + Math.max(0, -sw) * 0.35) * w);
     }
-    B.C_Hips.position.y = hipY + (Math.abs(Math.sin(p)) * 0.018 - 0.012) * w;
+    B.C_Hips.position.y = hipY + (Math.abs(Math.sin(p)) * 0.02 - 0.015) * w;
     B.C_Hips.rotation.y = Math.sin(p) * 0.08 * w;
-    B.C_Spine.rotation.x = -0.07 * w + Math.sin(st.t * 1.6) * 0.012;                          // condong saat jalan, napas saat diam
+    B.C_Spine.rotation.x = -hunch - 0.05 * w + Math.sin(st.t * 1.6) * 0.012;                 // bungkuk, condong saat jalan, napas
+    B.C_Neck.rotation.x = hunch * 0.7;
     B.C_Head.rotation.z = Math.sin(st.t * 0.7) * 0.03 * (1 - w);
     B.C_Head.rotation.y = -B.C_Hips.rotation.y;
     st.blink -= dt;
