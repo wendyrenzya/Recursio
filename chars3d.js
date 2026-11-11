@@ -140,14 +140,27 @@ function buildArm(torso, side, o) {
   return { shoulder, elbow };
 }
 
-// kepala: bola yang dilebarkan di pipi dan dipendekkan di dagu. Fungsi yang sama dipakai untuk tempelan wajah.
+// kepala dipahat, bukan bola polos: tempurung bulat, wajah bagian bawah pendek dan lebar di pipi, dagu kecil,
+// hidung menonjol, rongga mata sedikit masuk, pipi menggembung. Fungsi yang sama dipakai untuk tempelan wajah.
+const YK = 0.88, WK = 0.15, EYE_Y = -0.07, NOSE_Y = -0.14, MOUTH_Y = -0.19;
+const sm = (v) => { const t = Math.max(0, Math.min(1, v)); return t * t * (3 - 2 * t); };
+const wide = (ys) => 1 + WK * sm(-ys / R / 0.45);
 function shapeHead(g, k = 1) {
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), y = p.getY(i), z = p.getZ(i), ny = y / R, t = Math.max(0, -ny);
-    const cheek = Math.exp(-(((ny + 0.3) / 0.36) ** 2));
-    const taper = 1 - 0.34 * t ** 1.6;                       // rahang menyempit ke dagu
-    p.setXYZ(i, x * (0.96 + 0.05 * cheek) * taper * k, y * (ny < 0 ? 1.0 : 0.98) * k, (z * (1 - 0.2 * t * t) + 0.055 * t ** 1.5) * k);
+    let x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const s = sm(-y / R / 0.45);
+    x *= (1 + WK * s * (z > 0 ? 1 : 0.35)) * (1 - 0.42 * sm((-y / R - 0.5) / 0.5));   // pipi lebar, lalu menyempit ke dagu
+    if (y < 0) y *= YK;
+    if (z > 0) z = z * (1 - 0.06 * s) + 0.02 * s;
+    if (z > 0.08) {
+      const G = (cx, cy, sg) => Math.exp(-((x - cx) ** 2 + (y - cy) ** 2) / (sg * sg));
+      z += 0.024 * G(0, NOSE_Y, 0.026) + 0.02 * G(0, -0.238, 0.04)                     // hidung, dagu
+        - 0.015 * (G(0.114, EYE_Y, 0.062) + G(-0.114, EYE_Y, 0.062))                     // rongga mata
+        + 0.014 * (G(0.175, -0.16, 0.06) + G(-0.175, -0.16, 0.06))                     // pipi
+        - 0.005 * G(0, MOUTH_Y, 0.03);
+    }
+    p.setXYZ(i, x * k, y * k, z * k);
   }
   g.computeVertexNormals();
   return g;
@@ -155,26 +168,31 @@ function shapeHead(g, k = 1) {
 
 // ---------------------------------------------------------------- wajah dilukis
 // tempelan wajah = potongan bola di depan kepala. Kanvas 1024 x 800, 640 px per radian.
-const FW = 1024, FH = 800, RAD = 640, S = RAD / R, F_PHI = FW / RAD, F_UP = 0.55, F_TH = FH / RAD;
+const FW = 1024, FH = 960, RAD = 640, S = RAD / R, F_PHI = FW / RAD, F_UP = 0.55, F_TH = FH / RAD;
 function fp(x, y) {
+  if (y < 0) y /= YK;
+  x /= wide(y);
   const lat = Math.asin(y / R), lon = Math.asin(Math.max(-1, Math.min(1, x / (R * Math.cos(lat)))));
   return [FW / 2 + lon * RAD, F_UP * RAD - lat * RAD];
 }
 function faceTex(o, closed) {
   const cv = document.createElement("canvas"); cv.width = FW; cv.height = FH;
   const c = cv.getContext("2d");
-  const ex = o.eyeX || 0.104, ey = o.eyeY || -0.062, rx = (o.eyeW || 0.045) * S, ry = (o.eyeH || 0.066) * S, ink = "#2b1a20";
+  const ex = o.eyeX || 0.114, ey = EYE_Y, rx = (o.eyeW || 0.052) / 1.1 * S, ry = (o.eyeH || 0.068) / YK * S, ink = "#2b1a20";
   c.lineCap = "round"; c.lineJoin = "round";
   const fs = c.createLinearGradient(0, FH * 0.1, 0, FH * 0.44);                  // bayangan poni di dahi
   fs.addColorStop(0, "rgba(190,110,90,0.26)"); fs.addColorStop(1, "rgba(170,90,80,0)");
   c.fillStyle = fs; c.fillRect(0, 0, FW, FH * 0.44);
   for (const s of [-1, 1]) {
-    const [bx, by] = fp(s * 0.14, ey - 0.08), br = 0.05 * S;                 // pipi merona
+    const [bx, by] = fp(s * 0.18, ey - 0.085), br = 0.055 * S;                 // pipi merona
     const bl = c.createRadialGradient(bx, by, 0, bx, by, br);
     bl.addColorStop(0, "rgba(242,120,110,0.5)"); bl.addColorStop(1, "rgba(242,120,110,0)");
     c.fillStyle = bl; c.fillRect(bx - br, by - br, br * 2, br * 2);
 
     const [px, py] = fp(s * ex, ey);
+    const so = c.createRadialGradient(px, py - ry * 0.5, ry * 0.5, px, py - ry * 0.5, ry * 1.7);   // bayangan kelopak
+    so.addColorStop(0, "rgba(196,112,92,0.3)"); so.addColorStop(1, "rgba(196,112,92,0)");
+    c.fillStyle = so; c.fillRect(px - ry * 2, py - ry * 2.4, ry * 4, ry * 3.6);
     c.save(); c.translate(px, py);
     if (closed) {                                                               // mata terpejam
       c.strokeStyle = ink; c.lineWidth = ry * 0.17;
@@ -216,29 +234,31 @@ function faceTex(o, closed) {
     c.beginPath(); c.moveTo(-s * rx * 0.75, by0 + ry * (o.sleepy ? -0.06 : 0.1)); c.quadraticCurveTo(0, by0 - ry * 0.1, s * rx * 0.85, by0 + ry * 0.04); c.stroke();
     c.restore();
   }
-  const [mx, my] = fp(0, ey - 0.108);
-  c.strokeStyle = "#9a4a42"; c.lineWidth = 7;
+  const [mx, my] = fp(0, MOUTH_Y);
+  c.strokeStyle = "#9a4a42"; c.lineWidth = 9;
   c.beginPath();
   if (o.mouth === "flat") { c.moveTo(mx - 16, my); c.quadraticCurveTo(mx, my + 4, mx + 16, my); }
-  else { c.moveTo(mx - 22, my - 4); c.quadraticCurveTo(mx, my + 14, mx + 22, my - 4); }
+  else { c.moveTo(mx - 30, my - 5); c.quadraticCurveTo(mx, my + 18, mx + 30, my - 5); }
   c.stroke();
-  const [nx, ny] = fp(0, ey - 0.062);
-  c.strokeStyle = "rgba(150,80,60,0.5)"; c.lineWidth = 5; c.beginPath(); c.moveTo(nx - 3, ny); c.lineTo(nx + 3, ny + 2); c.stroke();
+  const [nx, ny] = fp(0, NOSE_Y - 0.016);                                        // bayangan di bawah hidung
+  const ns = c.createRadialGradient(nx, ny, 0, nx, ny, 26);
+  ns.addColorStop(0, "rgba(190,100,80,0.45)"); ns.addColorStop(1, "rgba(190,100,80,0)");
+  c.fillStyle = ns; c.fillRect(nx - 26, ny - 14, 52, 40);
   if (o.wrinkle) {                                                              // garis senyum nenek
     c.strokeStyle = "rgba(140,84,60,0.5)"; c.lineWidth = 4;
-    for (const s of [-1, 1]) { const [wx, wy] = fp(s * 0.062, ey - 0.098); c.beginPath(); c.moveTo(wx, wy - 14); c.quadraticCurveTo(wx + s * 8, wy, wx, wy + 14); c.stroke(); }
+    for (const s of [-1, 1]) { const [wx, wy] = fp(s * 0.07, MOUTH_Y + 0.012); c.beginPath(); c.moveTo(wx, wy - 14); c.quadraticCurveTo(wx + s * 8, wy, wx, wy + 14); c.stroke(); }
   }
   const t = new THREE.CanvasTexture(cv);
   t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
   return t;
 }
 function buildHead(head, o) {
-  add(head, shapeHead(ball(R, 40, 28)), o.skin);
-  const patch = shapeHead(new THREE.SphereGeometry(R, 28, 20, Math.PI / 2 - F_PHI / 2, F_PHI, Math.PI / 2 - F_UP, F_TH), 1.004);
+  add(head, shapeHead(ball(R, 96, 64)), o.skin);
+  const patch = shapeHead(new THREE.SphereGeometry(R, 56, 44, Math.PI / 2 - F_PHI / 2, F_PHI, Math.PI / 2 - F_UP, F_TH), 1.004);
   const open = faceTex(o, false), shut = faceTex(o, true);
   const fm = new THREE.MeshStandardMaterial({ map: open, transparent: true, depthWrite: false, roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -2 });
   const face = new THREE.Mesh(patch, fm); head.add(face);
-  for (const s of [-1, 1]) add(head, ball(0.055, 14, 10), o.skin, [s * 0.292, -0.05, -0.02], [0, 0, 0], [0.5, 1, 0.8]);   // telinga
+  for (const s of [-1, 1]) add(head, ball(0.055, 14, 10), o.skin, [s * 0.312, -0.055, -0.02], [0, 0, 0], [0.5, 1, 0.8]);   // telinga
   return (closed) => { fm.map = closed ? shut : open; };
 }
 
@@ -298,7 +318,7 @@ function strands(head, o, r, list) {
   m.castShadow = true; m.receiveShadow = true; head.add(m);
 }
 function hairBase(head, o, r, S, sw, flick, tiers) {
-  add(head, ball(r, 36, 24), o.hair2m, MC.toArray());
+  add(head, new THREE.SphereGeometry(r, 36, 24, 0, Math.PI * 2, 0, Math.PI * 0.64), o.hair2m, MC.toArray());   // massa rambut, terbuka di bawah
   const rnd = seed(o.seed || 7), j = (a) => (rnd() - 0.5) * a;
   for (const [e0, e1, step, off, minAz, w] of tiers) for (let a = -180 + off; a < 180; a += step) {
     if (Math.abs(a) < minAz) continue;
@@ -311,7 +331,7 @@ const HAIR = {
     const r = 0.348 + (o.puff || 0), S = [], f = o.hairFlip ? -1 : 1;
     hairBase(head, o, r, S, 14 * f, 0.05, [[82, 46, 40, 10, 0, 0.105], [58, 16, 30, 15, 58, 0.1], [30, -14, 30, 0, 80, 0.095], [4, -40, 28, 12, 104, 0.085]]);
     for (const [a0, a1, e1, w] of o.fringe) S.push([f * a0, 66, f * a1, e1 + 9, w, 0.014, 0.03]);
-    for (const s of [-1, 1]) S.push([s * 78, 52, s * 76, -22, 0.058, 0.02, 0.02], [s * 92, 46, s * 90, -32, 0.06, 0.03, 0.02]);
+    for (const s of [-1, 1]) S.push([s * 84, 52, s * 84, -20, 0.056, 0.02, 0.02], [s * 96, 46, s * 94, -30, 0.06, 0.03, 0.02]);
     strands(head, o, r, S);
   },
   // rambut ibu dan nenek: belah tengah, disisir ke belakang, sanggul
@@ -378,7 +398,7 @@ const CHARS = {
     })),
     extra(p) {
       add(p.torso, loft([[0.275, 0.108, 0.1, 0, -0.012], [0.335, 0.098, 0.09, 0, -0.016]], false, false), "#ffa24e");   // kerah berdiri
-      add(p.head, ball(0.03, 12, 8), "#fff0d8", [0.3, -0.04, -0.05], [0, 0, 0], [0.6, 1.25, 0.9]);                  // alat bantu dengar
+      add(p.head, ball(0.03, 12, 8), "#fff0d8", [0.325, -0.045, -0.05], [0, 0, 0], [0.6, 1.25, 0.9]);                  // alat bantu dengar
     },
   },
   kael: {
@@ -412,12 +432,12 @@ const CHARS = {
     body: () => tex(batik("#d6557a", "#ffd878", "#7a1e38", true)),
     extra(p) {
       add(p.torso, loft([[0.285, 0.1, 0.094], [0.325, 0.07, 0.068]], false, false), "#ffe6c8");           // kerah
-      for (const s of [-1, 1]) add(p.head, ball(0.018, 10, 8), gold(), [s * 0.292, -0.115, -0.02]);       // anting
+      for (const s of [-1, 1]) add(p.head, ball(0.018, 10, 8), gold(), [s * 0.315, -0.118, -0.02]);       // anting
     },
   },
   nenek: {
     name: "Nenek Kael", scale: 0.92, skin: "#f0c8aa", hair: "#d4d4e2", hair2: "#a2a2ba", hair3: "#fbfbff", hairFn: "bun", hunch: 0.14, wrinkle: true,
-    bunY: 0.3, bunZ: -0.27, eyeH: 0.05, eyeW: 0.038, iris: ["#2e2220", "#6a4c40", "#a88670"],
+    bunY: 0.3, bunZ: -0.27, eyeH: 0.054, eyeW: 0.044, iris: ["#2e2220", "#6a4c40", "#a88670"],
     bareLegs: true, shoe: "#74503c", sole: "#4a3022", sleeve: "#7cb898", wristBand: "#ffffff", torso: SLIM,
     dress: () => tex(cloth(256, 256, (c, w, h) => {   // sarung batik bergaris
       c.fillStyle = "#845836"; c.fillRect(0, 0, w, h);
@@ -435,8 +455,8 @@ const CHARS = {
     extra(p) {
       add(p.torso, ball(0.02, 10, 8), gold(), [0, 0.24, 0.116]);                                            // bros
       const frame = mat("#8a5a3c", { roughness: 0.45, flat: true });
-      for (const s of [-1, 1]) add(p.head, new THREE.TorusGeometry(0.056, 0.007, 8, 28), frame, [s * 0.104, -0.062, 0.284], [0.08, s * 0.34, 0]);   // kacamata bulat
-      add(p.head, new THREE.CylinderGeometry(0.006, 0.006, 0.07, 8), frame, [0, -0.056, 0.304], [0, 0, Math.PI / 2]);
+      for (const s of [-1, 1]) add(p.head, new THREE.TorusGeometry(0.056, 0.007, 8, 28), frame, [s * 0.116, EYE_Y, 0.272], [0.06, s * 0.36, 0]);   // kacamata bulat
+      add(p.head, new THREE.CylinderGeometry(0.006, 0.006, 0.07, 8), frame, [0, EYE_Y + 0.006, 0.296], [0, 0, Math.PI / 2]);
     },
   },
 };
@@ -447,7 +467,7 @@ export const charName = (key) => CHARS[key].name;
 
 export function buildChar(key) {
   const o = { ...CHARS[key] };
-  o.hairm = mat(o.hair, { flat: true, roughness: 0.8 }); o.hair2m = mat(o.hair2, { flat: true, roughness: 0.8 });
+  o.hairm = mat(o.hair, { flat: true, roughness: 0.8 }); o.hair2m = mat(o.hair2, { flat: true, roughness: 0.8, side: THREE.DoubleSide });
   o.skin = mat(o.skin, { sh: "#d07860" });
   const root = new THREE.Group(), body = new THREE.Group(), hips = new THREE.Group(), torso = new THREE.Group(), head = new THREE.Group();
   root.add(body); body.add(hips); hips.add(torso); torso.add(head);
