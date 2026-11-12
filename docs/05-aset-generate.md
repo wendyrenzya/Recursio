@@ -4,7 +4,8 @@ Tumbuhan, kolam, kebun, dan tekstur tanah memakai gambar hasil generate supaya t
 
 ## Cara kirim
 
-- Simpan setiap gambar di folder `assets/gen/` dengan nama file persis seperti tabel di bawah, format PNG.
+- Simpan setiap gambar di folder `assets/gen/` dengan nama file persis seperti tabel di bawah. Format PNG atau JPG (hasil Google Flow berupa JPG, cukup ganti akhiran nama menjadi .jpg, misalnya `tree_1.jpg`).
+- Tepi keunguan sisa kompresi JPG di sekitar latar magenta dibersihkan saat dipasang.
 - Ukuran minimal sisi terpendek 1024 piksel. Rasio mengikuti tabel; ukuran persisnya nanti dirapikan saat dipasang.
 - Gambar dengan latar magenta (#FF00FF): latarnya dihapus otomatis saat dipasang. Kalau latarnya tidak rata atau ada bayangan di tanah, generate ulang.
 - Semua gambar memakai gaya yang sama: lukisan latar anime, cahaya lembut dari kiri atas.
