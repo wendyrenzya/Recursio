@@ -130,21 +130,23 @@ Nama masih placeholder. Pengikut sekte di Bab 5 tidak berstatus Terkendali, jadi
 
 | Bab | Musuh | Tipe | HP | ATK | DEF | SPD | XP |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Anomali Statis | Anomali EM | 20 | 7 | 2 | 4 | 12 |
-| 1 | Lonjakan Sinyal (bos) | Anomali EM | 60 | 9 | 3 | 5 | 40 |
-| 2 | Anomali Berdengung | Anomali EM | 35 | 11 | 4 | 6 | 20 |
-| 2 | Warga Terkendali | Manusia | 45 | 10 | 3 | 5 | 18 |
-| 2 | Gema Jaringan (bos) | Anomali EM | 110 | 13 | 5 | 6 | 60 |
-| 3 | Anomali Siaran | Anomali EM | 55 | 15 | 6 | 7 | 28 |
-| 3 | Peretas Terkendali | Manusia | 70 | 14 | 5 | 7 | 30 |
-| 3 | Rekan yang Hilang (bos) | Manusia | 180 | 17 | 8 | 7 | 90 |
-| 4 | Warga Terkendali Kuat | Manusia | 90 | 19 | 8 | 7 | 40 |
-| 4 | Anomali Pusaran | Anomali EM | 100 | 22 | 10 | 9 | 45 |
-| 4 | Orang Dekat Terkendali (bos) | Manusia | 280 | 24 | 12 | 8 | 140 |
+| 1 | Anomali Statis | Anomali EM | 55 | 22 | 2 | 4 | 12 |
+| 1 | Lonjakan Sinyal (bos) | Anomali EM | 165 | 20 | 3 | 5 | 40 |
+| 2 | Anomali Berdengung | Anomali EM | 95 | 31 | 4 | 6 | 20 |
+| 2 | Warga Terkendali | Manusia | 120 | 28 | 3 | 5 | 18 |
+| 2 | Gema Jaringan (bos) | Anomali EM | 245 | 28 | 5 | 6 | 60 |
+| 3 | Anomali Siaran | Anomali EM | 85 | 35 | 6 | 7 | 28 |
+| 3 | Peretas Terkendali | Manusia | 110 | 33 | 5 | 7 | 30 |
+| 3 | Rekan yang Hilang (bos) | Manusia | 190 | 25 | 8 | 7 | 90 |
+| 4 | Warga Terkendali Kuat | Manusia | 100 | 38 | 8 | 7 | 40 |
+| 4 | Anomali Pusaran | Anomali EM | 115 | 44 | 10 | 9 | 45 |
+| 4 | Orang Dekat Terkendali (bos) | Manusia | 140 | 28 | 12 | 8 | 140 |
 | 5 | Pengikut Sekte | Manusia, beriman | Iman 100 | 26 | 14 | 8 | 55 |
 | 5 | Pengawal Nabi (bos) | Manusia, beriman | Iman 200 | 28 | 15 | 10 | 200 |
 
-Semua bos manusia dilumpuhkan atau dibebaskan, tidak dibunuh. Angka di tabel diuji dengan simulasi pada tahap build.
+Semua bos manusia dilumpuhkan atau dibebaskan, tidak dibunuh. Semua bos beraksi dua kali per ronde (aksi kedua di akhir ronde), karena bos yang beraksi sekali melawan dua anggota party membuat battle bos terlalu lama.
+
+HP dan ATK Bab 1 sampai 4 di tabel sudah hasil tuning simulasi build (12 November 2026). Angka awal terlalu lemah: pemain yang hanya Serang pun menang hampir 100 persen. Patokan tuning: pukulan biasa musuh sekitar 50 persen HP Nino di level target (bos 45 persen di Bab 1 dan 2, 35 persen di Bab 3, 30 persen di Bab 4), lalu HP musuh disetel sampai persentase menang masuk target. Angka Bab 5 menunggu mekanik Bukti.
 
 ## Struktur data
 

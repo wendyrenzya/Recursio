@@ -4,3 +4,4 @@ docs
 wrangler.toml
 .assetsignore
 assets/gen/src
+tools

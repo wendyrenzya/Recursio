@@ -144,7 +144,24 @@ Dokumen ini mengubah enam bagian Game System v1. Perubahan ini sudah diterapkan 
 
 **Kriteria lulus saat build**
 
-- [ ] Simulasi 1.000 battle per bab dengan strategi berhenti di kedalaman 2: menang 70 sampai 90 persen melawan musuh biasa, 50 sampai 70 persen melawan bos.
+- [x] Simulasi 1.000 battle per bab dengan strategi berhenti di kedalaman 2: menang 70 sampai 90 persen melawan musuh biasa, 50 sampai 70 persen melawan bos. Lulus untuk Bab 1 sampai 4 (`node tools/sim.mjs`), Bab 5 menyusul bersama Bukti.
+
+**Hasil simulasi build (12 November 2026)**
+
+Asumsi simulasi: battle biasa berisi 2 musuh bab itu, bos dilawan sendiri dengan 2 Kopi Kaleng. Party masuk dengan HP penuh, EN 5, kesadaran 100, di level target. Pemain salah tap 10 persen saat layar diretas. Strategi: Stack berhenti di kedalaman 2, musuh yang Mengisi diincar untuk Sela, Kael menyembuhkan sekutu di bawah 40 persen HP, Nino memakai Putus Sinyal saat EN cukup. Dengar dan Balapan belum ikut dihitung.
+
+| Bab | Battle | Menang | Rata-rata ronde |
+| --- | --- | --- | --- |
+| 1 | Biasa | 78 persen | 6,5 |
+| 1 | Bos | 62 persen | 9,0 |
+| 2 | Biasa | 79 persen | 8,6 |
+| 2 | Bos | 55 persen | 9,0 |
+| 3 | Biasa | 86 persen | 7,5 |
+| 3 | Bos | 64 persen | 6,6 |
+| 4 | Biasa | 80 persen | 6,8 |
+| 4 | Bos | 64 persen | 6,2 |
+
+Catatan: battle biasa 6 sampai 9 ronde masih terasa panjang untuk HP. Penyebab utamanya Jangkar (pulih 20 + 2 x level per giliran) yang hampir menutup damage musuh. Kalau battle mau lebih singkat, pilihannya menurunkan Jangkar atau menaikkan biayanya, lalu tuning ulang musuh.
 - [ ] Uji Balapan di HP Android kelas menengah: pemain baru menang minimal 80 persen percobaan di bos Bab 1.
 - [ ] Tiap jenis glitch Retas dikenali dalam 6 detik oleh 3 penguji baru.
 - [ ] Bab 5 bisa dimenangkan dengan minimal 6 dari 12 kartu Bukti.
