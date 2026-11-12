@@ -107,9 +107,6 @@ function buildGround() {
   stamp(c, paintLayer("#7a5034", [[[100, 70, 45], 0.4]], ["rgba(60,38,24,0.5)", "rgba(150,110,75,0.4)"], 3), softMask((x, y) => tileAt(x, y) === FIELD, 3));
   stamp(c, paintLayer("#b8b4ac", [[[205, 200, 190], 0.4]], ["rgba(140,136,128,0.5)"], 7), softMask(isRoadLike, 5));   // bahu jalan semen
   stamp(c, paintLayer("#5a5d64", [[[80, 84, 92], 0.4], [[60, 62, 68], 0.4]], ["rgba(40,42,48,0.5)", "rgba(130,134,140,0.4)"], 4), softMask(isRoadLike, 1));   // aspal
-  c.fillStyle = "rgba(240,240,232,0.85)";             // marka putus-putus di jalan utama dan jalan melintang
-  for (let y = (1 + M) * GP; y < (MH - 1 + M) * GP; y += 48) if (Math.floor(y / GP) - M < 19 || Math.floor(y / GP) - M > 22) c.fillRect((10 + M) * GP - 2, y, 4, 26);
-  for (let x = (1 + M) * GP; x < (MW - 1 + M) * GP; x += 48) if (Math.floor(x / GP) - M < 8 || Math.floor(x / GP) - M > 11) c.fillRect(x, (21 + M) * GP - 2, 26, 4);
   stamp(c, paintLayer("#e3d3a2", [[[240, 225, 180], 0.4]], ["rgba(190,170,120,0.4)"], 5), softMask((x, y) => tileAt(x, y) === WATER, 14));   // pasir di tepi kolam
   stamp(c, paintLayer("#3a7fc0", [[[70, 150, 210], 0.5], [[30, 90, 160], 0.4]], [], 6), softMask((x, y) => tileAt(x, y) === WATER, 4));
   for (let i = 0; i < 9000; i++) {                    // helai rumput pendek
