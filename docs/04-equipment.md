@@ -222,11 +222,18 @@ Perubahan di tabel berikut sudah diterapkan ke PRD dan Game System.
 
 **Kriteria lulus saat build**
 
-- [ ] Uji otomatis: bonus bersih tiap tier di ILv maksimum lebih besar dari bonus bersih Normal ILv 1, dan tabel bonus bersih naik berurutan antar tier.
-- [ ] Setiap item di data lulus aturan: sisi plus tidak melebihi PV, sisi minus minimal MV, total SPD dari gear antara -3 dan +3.
+- [x] Uji otomatis: bonus bersih tiap tier di ILv maksimum lebih besar dari bonus bersih Normal ILv 1, dan tabel bonus bersih naik berurutan antar tier.
+- [x] Setiap item di data lulus aturan: sisi plus tidak melebihi PV, sisi minus minimal MV, total SPD dari gear antara -3 dan +3.
 - [ ] Simulasi: party yang tidak pernah mencuci menang minimal 10 poin persentase lebih jarang dari party yang rajin mencuci, supaya cuci terasa penting.
-- [ ] Uji sentuh: mengganti item di satu slot maksimal 3 tap dari menu.
+- [x] Uji sentuh: mengganti item di satu slot maksimal 3 tap dari menu (Tas, slot, item).
 - [ ] Sepatu Nenek Nino: setelah 10 aksi pemakai, Pegal 100, sepatu terlepas, dan pemakai Hang satu giliran.
+
+**Build equipment dasar (13 November 2026)**
+
+- Aktif: 4 slot, tier Normal dan Rare, plus dan minus, efek Overflow Ringan. Data di `battle/data.mjs`, aturan di `game/progress.mjs`, uji di `tools/test-progress.mjs`. Uji ini mencakup dua kriteria di atas untuk tier yang sudah aktif. Tier Epic ke atas diuji saat tiernya masuk.
+- Item Bab 1 di data: Topi Kardus, Kaos Oblong Pudar, Sandal Jepit Biru, Gelang Karet Nasi Kuning. Gelang Karet dipasang di ILv 3 (bukan 4 seperti contoh) supaya masuk rentang ILv Bab 1, dengan plus ATK +1, HP +1, Overflow Ringan dan minus DEF -1.
+- Sementara keempat item ada di tas sejak awal, sampai peti Bab 1 dibuat.
+- Kotor, Umur, cuci, perbaikan, dan bahan menyusul di Bab 2 sesuai tabel cakupan.
 
 **Pertanyaan terbuka**
 

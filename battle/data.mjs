@@ -28,6 +28,23 @@ export const DATA = {
     headset_gaming: { nama: "Headset Gaming", target: "kael", kesadaran: 30 },
   },
 
+  // Equipment v1. Bab 1: tier Normal dan Rare, efek kecil. PV dan MV dihitung di game/progress.mjs.
+  tier: {
+    normal: { nama: "Normal", pv: 1.0, minus: 0.25, ilvMaks: 5, umur: 40, efek: [] },
+    rare: { nama: "Rare", pv: 1.1, minus: 0.30, ilvMaks: 8, umur: 35, efek: ["kecil"] },
+  },
+  biayaPoin: { atk: 5, def: 5, hp: 2, spd: 12, kecil: 4, sedang: 8, besar: 14 },
+  efek: {
+    overflow_ringan: { nama: "Overflow Ringan", kelas: "kecil", info: "Peluang Overflow turun 5 persen" },
+  },
+  slot: { topi: "Topi", baju: "Baju", gelang: "Gelang", sepatu: "Sepatu" },
+  equip: {
+    topi_kardus: { nama: "Topi Kardus", slot: "topi", tier: "normal", ilv: 1, plus: { def: 1 }, minus: { hp: 1 } },
+    kaos_oblong_pudar: { nama: "Kaos Oblong Pudar", slot: "baju", tier: "normal", ilv: 2, plus: { hp: 4 }, minus: { atk: 1 } },
+    sandal_jepit_biru: { nama: "Sandal Jepit Biru", slot: "sepatu", tier: "normal", ilv: 3, plus: { def: 1, hp: 2 }, minus: { atk: 1 } },
+    gelang_karet_nasi_kuning: { nama: "Gelang Karet Nasi Kuning", slot: "gelang", tier: "rare", ilv: 3, plus: { atk: 1, hp: 1 }, minus: { def: 1 }, efek: "overflow_ringan" },
+  },
+
   // HP dan ATK hasil tuning simulasi 12 Nov 2026 (tools/sim.mjs), angka dokumen awal terlalu lemah.
   // ai: peluang tiap giliran (musuh biasa). pola: urutan tetap (bos). Mengisi dilepas di kedalaman `lepas`.
   musuh: {

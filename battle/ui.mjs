@@ -1,6 +1,6 @@
 // Layar battle di DOM, di atas dunia 3D. Logika aturan seluruhnya di engine.mjs.
 import { DATA } from "./data.mjs";
-import { createBattle, startRound, beginTurn, act, ulangi, dengar, allowed, alive, party, enemies, byId, tingkat } from "./engine.mjs";
+import { createBattle, startRound, beginTurn, act, ulangi, overflowChance, dengar, allowed, alive, party, enemies, byId, tingkat } from "./engine.mjs";
 
 const CSS = `
 #bt { position: absolute; inset: 0; z-index: 5; color: #f2f2ff; display: flex; flex-direction: column; gap: 0.5em; padding: 0.7em 0.7em 0.9em; box-sizing: border-box;
@@ -58,6 +58,7 @@ const CSS = `
 #bt .cmds.hacked { filter: hue-rotate(-30deg) saturate(1.4); }
 #bt .big { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.8em; background: rgba(6,6,16,0.75); z-index: 2; }
 #bt .big h2 { margin: 0; font-size: 1.8em; }
+#bt .naik { color: #ffd76a; font-weight: 800; }
 #bt .flash { position: absolute; left: 0; right: 0; top: 42%; text-align: center; font-size: 1.6em; font-weight: 800; color: #ff5c8a; text-shadow: 0 0 0.5em #f06; animation: btPop 0.9s forwards; pointer-events: none; z-index: 3; }
 @keyframes btPulse { 50% { transform: scale(1.04); } }
 @keyframes btShake { 25% { transform: translateX(-0.3em); } 75% { transform: translateX(0.3em); } }
@@ -71,7 +72,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 const fmt = (x) => String(x).replace(".", ",");
 
-// opts: { bab, musuh, party, items, speed }. Hasil Promise: "menang" | "kalah" | "mundur".
+// opts: { bab, musuh, party, items, speed, hasil(s) -> teks tambahan di layar akhir }. Hasil Promise: "menang" | "kalah" | "mundur".
 export function openBattle(host, opts) {
   if (!document.getElementById("btCss")) { const st = el("style"); st.id = "btCss"; st.textContent = CSS; document.head.appendChild(st); }
   const speed = opts.speed ?? 1;
@@ -169,17 +170,17 @@ export function openBattle(host, opts) {
   }
 
   // Stack: Ulangi naik satu kedalaman dengan undian Overflow, Selesai melepas aksi
-  async function stackPhase() {
+  async function stackPhase(f) {
     let depth = 1;
     for (;;) {
-      const next = depth + 1, chance = DATA.stack.overflow[next - 1];
+      const next = depth + 1, chance = overflowChance(s, next, f);
       const v = await buttons([
         { html: `<span class="sm">Kedalaman</span><b>${depth} | x${fmt(DATA.stack.mult[depth - 1])}</b>`, cls: "depth" },
         { label: depth < 4 ? `Ulangi` : "Maksimum", cost: depth < 4 ? `${Math.round(chance * 100)}%` : null, v: "u", disabled: depth >= 4, cls: "alt" },
         { label: "Selesai", v: "s" },
       ]);
       if (v === "s") return { depth, overflow: false };
-      const r = ulangi(s, depth);
+      const r = ulangi(s, depth, f);
       if (!r.ok) return { depth: r.depth, overflow: true };
       depth = r.depth;
     }
@@ -225,7 +226,7 @@ export function openBattle(host, opts) {
         if (t === "timeout") return doAct(f, { cmd: "bertahan" });
         if (t === "back") continue;
         stopTimer();
-        const st = await stackPhase();
+        const st = await stackPhase(f);
         return doAct(f, { cmd: "serang", target: t, ...st });
       }
       if (v === "skill") {
@@ -247,7 +248,7 @@ export function openBattle(host, opts) {
           if (target === "back") continue;
         }
         stopTimer();
-        const st = sk.stack ? await stackPhase() : {};
+        const st = sk.stack ? await stackPhase(f) : {};
         return doAct(f, { cmd: "skill", skill: id, target, ...st });
       }
       if (v === "barang") {
@@ -299,6 +300,7 @@ export function openBattle(host, opts) {
       const xp = enemies(s).reduce((a, e) => a + e.xp, 0);
       big.innerHTML = `<h2>Menang!</h2><div>XP +${xp}</div>`;
     } else big.innerHTML = s.over === "kalah" ? `<h2>Kalah...</h2><div class="sm">Nino dan Kael pingsan</div>` : `<h2>Kabur</h2>`;
+    for (const line of opts.hasil?.(s) || []) big.appendChild(el("div", "naik", line));   // misalnya naik level
     root.appendChild(big);
     const choices = s.over === "kalah" ? [["Coba lagi", "retry"], ["Kembali", "back"]] : [["Lanjut", "back"]];
     const v = await new Promise((res) => choices.forEach(([label, v]) => {

@@ -20,10 +20,10 @@ export function statAt(key, level) {
 export function createBattle({ bab = 1, musuh, party = {}, items = {}, rng = Math.random, d = DATA }) {
   const s = { d, rng, bab, round: 0, queue: [], log: [], over: null, items: { ...items }, fighters: [] };
   for (const key of ["nino", "kael"]) {
-    const p = party[key] || {}, level = p.level || 1, st = statAt(key, level);
+    const p = party[key] || {}, level = p.level || 1, st = p.stats || statAt(key, level);
     s.fighters.push({
-      id: key, key, side: "party", nama: d.karakter[key].nama, level, ...st, maxHp: st.hp,
-      hp: p.hp ?? st.hp, en: p.en ?? d.en.start, kesadaran: key === "kael" ? (p.kesadaran ?? d.kesadaran.max) : null, st: {},
+      id: key, key, side: "party", nama: d.karakter[key].nama, level, ...st, maxHp: st.hp, efek: p.efek || [],
+      hp: Math.min(p.hp ?? st.hp, st.hp), en: p.en ?? d.en.start, kesadaran: key === "kael" ? (p.kesadaran ?? d.kesadaran.max) : null, st: {},
     });
   }
   const count = {};
@@ -138,11 +138,17 @@ export function beginTurn(s) {
   return null;
 }
 
+// Peluang Overflow saat naik ke kedalaman `next`, dikurangi efek equipment pemakai.
+export function overflowChance(s, next, f) {
+  const base = s.d.stack.overflow[next - 1] || 0;
+  return Math.max(0, base - (f?.efek?.includes("overflow_ringan") ? 0.05 : 0));
+}
+
 // Satu tap Ulangi. Hasil { ok, depth }. ok false berarti Overflow.
-export function ulangi(s, depth) {
+export function ulangi(s, depth, f) {
   const next = depth + 1;
   if (next > 4) return { ok: true, depth };
-  return s.rng() < s.d.stack.overflow[next - 1] ? { ok: false, depth: next } : { ok: true, depth: next };
+  return s.rng() < overflowChance(s, next, f) ? { ok: false, depth: next } : { ok: true, depth: next };
 }
 
 // Aksi yang dibatasi saat Kael kritis.

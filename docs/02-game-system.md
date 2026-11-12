@@ -201,6 +201,7 @@ Saya usul membangun Bab 1 sampai tuntas dulu sebagai irisan vertikal, baru Bab 2
 2. **Dialog dan NPC:** Lulus jika tap NPC membuka dialog dan tap kotak dialog melanjutkannya sampai selesai.
 3. **Mesin battle dari data:** mulai dari Stack, Retas Layar, dan Dengar. Balapan dan Bukti menyusul sesuai bab. Lulus jika simulasi 1.000 battle per bab dengan party di level target menang 70 sampai 90 persen untuk musuh biasa dan 50 sampai 70 persen untuk bos.
 4. **Level, XP, bar kesadaran, equipment dasar, simpan:** equipment dasar berarti 4 slot, tier Normal dan Rare, plus dan minus. Lulus jika level naik sesuai tabel, bonus equipment masuk ke stat, dan data yang dimuat ulang sama dengan yang disimpan.
+   Status 13 November 2026: selesai. Level dan XP sesuai tabel, bonus equipment masuk ke stat, dan simpan otomatis di perangkat (`localStorage`, kunci `recursio.save.v1`). Data tersimpan setelah battle, setelah ganti equipment, dan tiap Nino berhenti berjalan. Asumsi sementara: selesai bicara dengan Alisa dihitung istirahat di rumah (HP dan kesadaran pulih penuh), dan radius 4 tile di sekitar titik anomali uji dihitung zona EM sedang. HP dan kesadaran terbawa antar battle, EN selalu mulai 5.
 5. **Bab 1 lengkap:** Lulus jika pemain bisa memainkan dari awal sampai mengalahkan Lonjakan Sinyal di HP.
 6. **Bab 2 sampai 5:** satu bab per tahap, tiap bab diuji dengan cara yang sama. Equipment menyusul per bab sesuai tabel di Equipment: cuci dan perbaikan di Bab 2, Epic di Bab 3, Legendary di Bab 4, Mythical di Bab 5.
 

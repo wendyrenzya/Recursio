@@ -32,6 +32,8 @@ import * as THREE from "./lib/three.module.min.js";
 import { loadChar } from "./chars3d.js";
 import { GLTFLoader } from "./lib/GLTFLoader.js";
 import { openBattle } from "./battle/ui.mjs";
+import { muat, simpan, partyBattle, selesaiBattle, istirahat, ubahKesadaran } from "./game/progress.mjs";
+import { createHud } from "./game/tas.mjs";
 
 // ================================================================ dasar
 // Logika memakai satuan piksel tile 16. Dunia 3D memakai 1 unit = 1 tile.
@@ -142,6 +144,9 @@ const npcAt = (x, y) => NPCS.find((n) => n.tx === x && n.ty === y);
 const walkable = (x, y) => baseWalkable(x, y) && !npcAt(x, y);
 
 const player = { tx: 9, ty: 3, x: 9 * TS, y: 3 * TS, path: [], dir: "down", walk: 0, yaw: 0 };
+const save = muat();                              // progres tersimpan di perangkat
+if (walkable(save.pos.tx, save.pos.ty)) Object.assign(player, { tx: save.pos.tx, ty: save.pos.ty, x: save.pos.tx * TS, y: save.pos.ty * TS });
+let hud = null, menuOpen = false;
 const DIR_YAW = { down: 0, up: Math.PI, left: -Math.PI / 2, right: Math.PI / 2 };   // arah hadap model 3D
 const target = { x: -1, y: -1 };
 const cam = { x: 0, z: 0 };                      // titik fokus kamera dalam satuan tile
@@ -162,7 +167,12 @@ function openDialog(n) {
 function advanceDialog() {
   const text = dlg.npc.lines[dlg.line];
   if (dlg.shown < text.length) { dlg.shown = text.length; return; }
-  if (++dlg.line >= dlg.npc.lines.length) { dlg.npc.dir = "down"; dlg.npc = null; return; }
+  if (++dlg.line >= dlg.npc.lines.length) {
+    const n = dlg.npc;
+    n.dir = "down"; dlg.npc = null;
+    if (n.name === "Alisa") { istirahat(save); simpan(save); hud.refresh(); hud.toast("Istirahat di rumah | HP dan kesadaran pulih"); }
+    return;
+  }
   dlg.shown = 0;
 }
 
@@ -221,18 +231,25 @@ function faceTo(dx, dy) {
 let battle = null;                               // Promise battle yang sedang berjalan
 function startBattle() {
   player.path = []; pending = null; target.x = -1; player.walk = 0;
+  hud.el.style.display = "none";
   battle = openBattle(document.getElementById("wrap"), {
-    bab: 1, musuh: ["anomali_statis", "anomali_statis"],
-    party: { nino: { level: 1 }, kael: { level: 1 } }, items: { kopi_kaleng: 2, baterai: 1, headset_gaming: 1 },
+    bab: 1, musuh: ["anomali_statis", "anomali_statis"], party: partyBattle(save), items: { ...save.item },
+    hasil: (s) => {
+      const naik = selesaiBattle(save, s);
+      if (s.over === "menang") save.flags.anomali_uji = true;
+      simpan(save);
+      return naik;
+    },
   });
   battle.then((r) => {
     if (r === "menang") { anomaly.alive = false; anomaly.group.visible = false; }
     anomaly.armed = false; battle = null;
+    hud.el.style.display = ""; hud.refresh();
   });
 }
 
 function update(dt) {
-  if (battle) { player.walk = 0; return; }
+  if (battle || menuOpen) { player.walk = 0; return; }
   if (dlg.npc) {
     dlg.shown = Math.min(dlg.npc.lines[dlg.line].length, dlg.shown + CPS * dt);
     player.walk = 0;
@@ -244,6 +261,7 @@ function update(dt) {
   player.moveT = rem > 0 ? (player.moveT || 0) + dt : 0;
   let move = SPEED * dt * Math.min(1, 0.35 + player.moveT / 0.18) * Math.min(1, 0.45 + rem / 10);
   let moved = false;
+  const x0 = player.x, y0 = player.y;
   while (move > 0 && player.path.length) {
     const [gx, gy] = player.path[0];
     const dx = gx - player.x, dy = gy - player.y, dist = Math.hypot(dx, dy);
@@ -262,6 +280,12 @@ function update(dt) {
   if (!moved) player.walk = 0;                       // walk: jarak tempuh dalam piksel, menggerakkan siklus langkah
   if (pending && atRest()) { if (adjacent(pending)) openDialog(pending); else pending = null; }
   const da = Math.hypot(player.x / TS - anomaly.tx, player.y / TS - anomaly.ty);
+  // zona EM sedang di sekitar anomali: kesadaran Kael turun 1 tiap 5 langkah
+  if (moved && anomaly.alive && da < 4) {
+    anomaly.emLangkah += Math.hypot(player.x - x0, player.y - y0) / TS;
+    while (anomaly.emLangkah >= 5) { anomaly.emLangkah -= 5; ubahKesadaran(save, -1); hud.refresh(); }
+  }
+  if (moved && !player.path.length) { save.pos = { tx: player.tx, ty: player.ty }; simpan(save); }
   if (da > 2) anomaly.armed = true;                  // setelah kabur atau kalah, harus menjauh dulu
   if (anomaly.alive && anomaly.armed && da < 1.1) startBattle();
 }
@@ -627,7 +651,7 @@ marker.rotation.x = -Math.PI / 2;
 scene.add(marker);
 
 // Titik anomali sementara untuk uji battle: kubus kecil yang bergetar dan berkedip. Didekati berarti battle.
-const anomaly = { tx: 5, ty: 18, alive: true, armed: true, group: new THREE.Group() };
+const anomaly = { tx: 5, ty: 18, alive: !save.flags.anomali_uji, armed: true, emLangkah: 0, group: new THREE.Group() };
 for (let i = 0; i < 9; i++) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.16), new THREE.MeshBasicMaterial({ color: ["#7ae8ff", "#ff4fb4", "#ffffff"][i % 3], toneMapped: false }));
   m.userData.seed = i * 1.7;
@@ -637,6 +661,7 @@ const anomalyLight = new THREE.PointLight("#9a7bff", 2.5, 3.5, 1.5);
 anomalyLight.position.y = 0.7;
 anomaly.group.add(anomalyLight);
 anomaly.group.position.set(anomaly.tx + 0.5, 0, anomaly.ty + 0.5);
+anomaly.group.visible = anomaly.alive;
 scene.add(anomaly.group);
 
 // ================================================================ post-processing HD-2D
@@ -706,6 +731,7 @@ const [playerActor, ...npcActors] = await Promise.all(["nino", ...NPCS.map((n) =
 await worldReady;
 document.getElementById("loading").remove();
 NPCS.forEach((n, i) => { n.actor = npcActors[i]; });
+hud = createHud(document.getElementById("wrap"), save, { onChange: () => simpan(save), onOpen: (o) => { menuOpen = o; player.path = []; target.x = -1; pending = null; } });
 
 function placeCamera() {
   camera.position.set(cam.x, DIST * Math.sin(PITCH), cam.z + DIST * Math.cos(PITCH));
@@ -761,7 +787,7 @@ const ray = new THREE.Raycaster();
 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 glCanvas.addEventListener("pointerdown", (e) => {
   e.preventDefault();
-  if (battle) return;
+  if (battle || menuOpen) return;
   if (dlg.npc) { advanceDialog(); return; }
   const r = glCanvas.getBoundingClientRect();
   const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
@@ -816,7 +842,7 @@ function tileToScreen(tx, ty) {
   const r = glCanvas.getBoundingClientRect();
   return { x: r.left + (p.x * 0.5 + 0.5) * r.width, y: r.top + (-p.y * 0.5 + 0.5) * r.height, left: r.left, top: r.top, w: r.width, h: r.height };
 }
-window.__recursio = { TS, MW, MH, map, player, cam, target, dlg, NPCS, CAM_BOUNDS, tileToScreen, playerActor, anomaly, get battle() { return battle; } };
+window.__recursio = { TS, MW, MH, map, player, cam, target, dlg, NPCS, CAM_BOUNDS, tileToScreen, playerActor, anomaly, save, get battle() { return battle; } };
 </script>
 </body>
 </html>
