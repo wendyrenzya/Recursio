@@ -31,6 +31,7 @@
 import * as THREE from "./lib/three.module.min.js";
 import { loadChar } from "./chars3d.js";
 import { GLTFLoader } from "./lib/GLTFLoader.js";
+import { openBattle } from "./battle/ui.mjs";
 
 // ================================================================ dasar
 // Logika memakai satuan piksel tile 16. Dunia 3D memakai 1 unit = 1 tile.
@@ -217,7 +218,21 @@ function faceTo(dx, dy) {
   else if (player.dir !== horiz && player.dir !== vert) player.dir = vert;
 }
 
+let battle = null;                               // Promise battle yang sedang berjalan
+function startBattle() {
+  player.path = []; pending = null; target.x = -1; player.walk = 0;
+  battle = openBattle(document.getElementById("wrap"), {
+    bab: 1, musuh: ["anomali_statis", "anomali_statis"],
+    party: { nino: { level: 1 }, kael: { level: 1 } }, items: { kopi_kaleng: 2, baterai: 1, headset_gaming: 1 },
+  });
+  battle.then((r) => {
+    if (r === "menang") { anomaly.alive = false; anomaly.group.visible = false; }
+    anomaly.armed = false; battle = null;
+  });
+}
+
 function update(dt) {
+  if (battle) { player.walk = 0; return; }
   if (dlg.npc) {
     dlg.shown = Math.min(dlg.npc.lines[dlg.line].length, dlg.shown + CPS * dt);
     player.walk = 0;
@@ -246,6 +261,9 @@ function update(dt) {
   if (!player.path.length) target.x = -1;
   if (!moved) player.walk = 0;                       // walk: jarak tempuh dalam piksel, menggerakkan siklus langkah
   if (pending && atRest()) { if (adjacent(pending)) openDialog(pending); else pending = null; }
+  const da = Math.hypot(player.x / TS - anomaly.tx, player.y / TS - anomaly.ty);
+  if (da > 2) anomaly.armed = true;                  // setelah kabur atau kalah, harus menjauh dulu
+  if (anomaly.alive && anomaly.armed && da < 1.1) startBattle();
 }
 
 // Fokus kamera mengikuti Nino, dibatasi agar tetap di dalam peta
@@ -608,6 +626,19 @@ const marker = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasic
 marker.rotation.x = -Math.PI / 2;
 scene.add(marker);
 
+// Titik anomali sementara untuk uji battle: kubus kecil yang bergetar dan berkedip. Didekati berarti battle.
+const anomaly = { tx: 5, ty: 18, alive: true, armed: true, group: new THREE.Group() };
+for (let i = 0; i < 9; i++) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.16), new THREE.MeshBasicMaterial({ color: ["#7ae8ff", "#ff4fb4", "#ffffff"][i % 3], toneMapped: false }));
+  m.userData.seed = i * 1.7;
+  anomaly.group.add(m);
+}
+const anomalyLight = new THREE.PointLight("#9a7bff", 2.5, 3.5, 1.5);
+anomalyLight.position.y = 0.7;
+anomaly.group.add(anomalyLight);
+anomaly.group.position.set(anomaly.tx + 0.5, 0, anomaly.ty + 0.5);
+scene.add(anomaly.group);
+
 // ================================================================ post-processing HD-2D
 // Scene dirender ke tekstur bermipmap. Mipmap dipakai sebagai blur murah untuk tilt-shift dan bloom.
 let rt = null;
@@ -692,6 +723,14 @@ function render(now, dt) {
   for (const n of NPCS) placeActor(n.actor, n.tx + 0.5, n.ty + 0.5, DIR_YAW[n.dir], dt, false);
   marker.visible = target.x >= 0;
   if (marker.visible) { marker.position.set(target.x + 0.5, 0.03, target.y + 0.5); marker.material.opacity = 0.55 + 0.45 * Math.sin(t * 8); }
+  if (anomaly.alive) anomaly.group.children.forEach((m, i) => {
+    if (!m.isMesh) return;
+    const k = m.userData.seed, j = Math.floor(t * 12 + k) % 5 === 0;
+    m.position.set(Math.sin(t * 2 + k) * 0.28 + (j ? 0.08 : 0), 0.45 + Math.sin(t * 3.1 + k * 2) * 0.25, Math.cos(t * 2 + k) * 0.28);
+    m.rotation.set(t * 2 + k, t * 3, 0);
+    m.visible = Math.floor(t * 9 + k * 3) % 7 !== 0;
+  });
+  anomalyLight.intensity = 2 + Math.sin(t * 20) * 0.8;
   waterMat.uniforms.uTime.value = t; flyMat.uniforms.uTime.value = t;
   halos.forEach((hl, i) => { const s = 1.6 + Math.sin(t * 3 + i) * 0.08; hl.scale.set(s, s, 1); });
   const fp = new THREE.Vector3(player.x / TS + 0.5, 0.6, player.y / TS + 0.5).project(camera);
@@ -722,6 +761,7 @@ const ray = new THREE.Raycaster();
 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 glCanvas.addEventListener("pointerdown", (e) => {
   e.preventDefault();
+  if (battle) return;
   if (dlg.npc) { advanceDialog(); return; }
   const r = glCanvas.getBoundingClientRect();
   const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
@@ -760,6 +800,7 @@ let last = performance.now();
 function frame(now) {
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
+  if (battle) { requestAnimationFrame(frame); return; }   // dunia diam selama battle, gambar terakhir jadi latar
   update(dt);
   updateCamera();
   render(now, dt);
@@ -775,7 +816,7 @@ function tileToScreen(tx, ty) {
   const r = glCanvas.getBoundingClientRect();
   return { x: r.left + (p.x * 0.5 + 0.5) * r.width, y: r.top + (-p.y * 0.5 + 0.5) * r.height, left: r.left, top: r.top, w: r.width, h: r.height };
 }
-window.__recursio = { TS, MW, MH, map, player, cam, target, dlg, NPCS, CAM_BOUNDS, tileToScreen, playerActor };
+window.__recursio = { TS, MW, MH, map, player, cam, target, dlg, NPCS, CAM_BOUNDS, tileToScreen, playerActor, anomaly, get battle() { return battle; } };
 </script>
 </body>
 </html>

@@ -166,6 +166,13 @@ Catatan: battle biasa 6 sampai 9 ronde masih terasa panjang untuk HP. Penyebab u
 - [ ] Tiap jenis glitch Retas dikenali dalam 6 detik oleh 3 penguji baru.
 - [ ] Bab 5 bisa dimenangkan dengan minimal 6 dari 12 kartu Bukti.
 
+**Layar battle (build, 12 November 2026)**
+
+- Layar battle ada di `battle/ui.mjs` dan memakai mesin yang sama dengan simulasi. Isinya kartu musuh (HP, kedalaman Stack, rencana jika Dengar), kartu Nino dan Kael (HP, EN, kesadaran), strip antrian, menu perintah, fase Stack (Ulangi dengan peluang Overflow, Selesai), dan glitch Tukar dengan batas 6 detik.
+- Untuk uji, ada satu titik anomali di peta (dekat jalan melintang) yang memicu battle melawan 2 Anomali Statis. Menang berarti anomali hilang. Kalah bisa diulang. Ini sementara sampai konten Bab 1 dibuat.
+- Dunia 3D berhenti dirender selama battle supaya hemat baterai. Gambar terakhirnya jadi latar.
+- Belum ada: glitch Palsu dan Spam (Bab 2 ke atas), Balapan (battle bos), Bukti (Bab 5), dan mode santai tanpa batas waktu.
+
 **Pertanyaan terbuka**
 
 - [x] Equipment yang memberi efek khusus memengaruhi mekanik ini: Overflow Ringan, Waktu Lega, Telinga Tenang, Start Mantap, dan Ulang Sekali. Dirinci di dokumen Equipment.
