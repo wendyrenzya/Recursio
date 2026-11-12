@@ -31,7 +31,6 @@
 import * as THREE from "./lib/three.module.min.js";
 import { loadChar } from "./chars3d.js";
 import { GLTFLoader } from "./lib/GLTFLoader.js";
-import { mergeVertices } from "./lib/BufferGeometryUtils.js";
 
 // ================================================================ dasar
 // Logika memakai satuan piksel tile 16. Dunia 3D memakai 1 unit = 1 tile.
@@ -95,26 +94,17 @@ function paintLayer(base, blobs, specks, seed) {
   }
   return cv;
 }
-function stamp(dst, layer, mask) {                  // tempel lapisan hanya di area mask
+function stamp(dst, layer, mask, alpha = 1) {       // tempel lapisan hanya di area mask
   const c = layer.getContext("2d");
   c.globalCompositeOperation = "destination-in"; c.drawImage(mask, 0, 0);
-  dst.drawImage(layer, 0, 0);
+  dst.globalAlpha = alpha; dst.drawImage(layer, 0, 0); dst.globalAlpha = 1;
 }
+// lapisan di atas rumput: bayang gelap di hutan pinggir, bahu jalan semen, dan aspal; selebihnya transparan
 function buildGround() {
-  const cv = paintLayer("#4a8c40", [[[100, 170, 80], 0.35], [[50, 115, 55], 0.4], [[130, 185, 90], 0.22]], ["rgba(40,100,40,0.35)", "rgba(170,220,120,0.35)"], 1);
-  const c = cv.getContext("2d");
-  stamp(c, paintLayer("#2f6b37", [[[30, 80, 40], 0.5], [[60, 110, 50], 0.4]], ["rgba(20,50,25,0.4)"], 2), softMask((x, y) => tileAt(x, y) === FOREST, 16));
-  stamp(c, paintLayer("#7a5034", [[[100, 70, 45], 0.4]], ["rgba(60,38,24,0.5)", "rgba(150,110,75,0.4)"], 3), softMask((x, y) => tileAt(x, y) === FIELD, 3));
+  const cv = mk(GW, GH), c = cv.getContext("2d");
+  stamp(c, paintLayer("#1f4a28", [[[30, 70, 35], 0.5]], [], 2), softMask((x, y) => tileAt(x, y) === FOREST, 16), 0.55);
   stamp(c, paintLayer("#b8b4ac", [[[205, 200, 190], 0.4]], ["rgba(140,136,128,0.5)"], 7), softMask(isRoadLike, 5));   // bahu jalan semen
   stamp(c, paintLayer("#5a5d64", [[[80, 84, 92], 0.4], [[60, 62, 68], 0.4]], ["rgba(40,42,48,0.5)", "rgba(130,134,140,0.4)"], 4), softMask(isRoadLike, 1));   // aspal
-  stamp(c, paintLayer("#e3d3a2", [[[240, 225, 180], 0.4]], ["rgba(190,170,120,0.4)"], 5), softMask((x, y) => tileAt(x, y) === WATER, 14));   // pasir di tepi kolam
-  stamp(c, paintLayer("#3a7fc0", [[[70, 150, 210], 0.5], [[30, 90, 160], 0.4]], [], 6), softMask((x, y) => tileAt(x, y) === WATER, 4));
-  for (let i = 0; i < 9000; i++) {                    // helai rumput pendek
-    const x = hash(i, 8, 9) % GW, y = hash(i, 9, 9) % GH;
-    if (tileAt(Math.floor(x / GP) - M, Math.floor(y / GP) - M) !== GRASS) continue;
-    c.strokeStyle = hash(i, 10, 9) % 2 ? "rgba(40,105,40,0.45)" : "rgba(175,225,120,0.45)"; c.lineWidth = 1.5;
-    c.beginPath(); c.moveTo(x, y); c.lineTo(x + (hash(i, 11, 9) % 5) - 2, y - 4 - hash(i, 12, 9) % 4); c.stroke();
-  }
   return cv;
 }
 
@@ -296,19 +286,58 @@ sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02; sun.shadow.radius = 3;
 scene.add(sun, sun.target);
 scene.add(new THREE.HemisphereLight("#a596e0", "#6e5238", 1.7));
 
-// tanah
-const groundTex = smoothTex(buildGround());
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(MW + 2 * M, MH + 2 * M), new THREE.MeshLambertMaterial({ map: groundTex }));
-ground.rotation.x = -Math.PI / 2;
-ground.position.set(MW / 2, 0, MH / 2);
-ground.receiveShadow = true;
-scene.add(ground);
+// gambar hasil generate (assets/gen): tumbuhan, kolam, kebun, rumput. Semua dimuat bersamaan dan ditunggu sebelum permainan mulai.
+const texLoader = new THREE.TextureLoader(), dummy = new THREE.Object3D();
+async function genTex(name) {
+  const t = await texLoader.loadAsync(`./assets/gen/${name}.webp`);
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return t;
+}
+// tanah: rumput berulang tiap 4 tile, lalu lapisan jalan dan bayang hutan di atasnya
+const groundGeo = new THREE.PlaneGeometry(MW + 2 * M, MH + 2 * M);
+const ground = new THREE.Mesh(groundGeo, new THREE.MeshLambertMaterial({ color: "#ffffff" }));
+const groundLayer = new THREE.Mesh(groundGeo, new THREE.MeshLambertMaterial({ map: smoothTex(buildGround()), transparent: true, depthWrite: false }));
+for (const [m, y] of [[ground, 0], [groundLayer, 0.005]]) {
+  m.rotation.x = -Math.PI / 2; m.position.set(MW / 2, y, MH / 2); m.receiveShadow = true; scene.add(m);
+}
+groundLayer.renderOrder = 1;
+const groundReady = genTex("grass").then((t) => {
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set((MW + 2 * M) / 4, (MH + 2 * M) / 4);
+  ground.material.map = t; ground.material.needsUpdate = true;
+});
+// gambar datar di tanah (kolam, kebun): w x d tile, berpusat di (x, z)
+async function decal(name, x, z, w, d) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshLambertMaterial({ map: await genTex(name), alphaTest: 0.05, transparent: true, depthWrite: false }));
+  m.rotation.x = -Math.PI / 2; m.position.set(x, 0.01, z); m.receiveShadow = true; m.renderOrder = 2;
+  scene.add(m);
+}
+// tumbuhan: bidang tegak dimiringkan ke arah kamera, berdiri di titik dasarnya. Daftar [x, z, skala, balik kiri-kanan].
+const TILT = PITCH - THREE.MathUtils.degToRad(12);
+async function sprites(name, height, groups) {
+  const t = await genTex(name), w = height * t.image.width / t.image.height;
+  const geo = new THREE.PlaneGeometry(w, height); geo.translate(0, height / 2, 0); geo.rotateX(-TILT);
+  const n = geo.attributes.normal;                   // normal menghadap ke atas: disinari seperti tanah, bukan gelap terkena cahaya samping
+  for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 0.94, 0.34);
+  const geoFlip = geo.clone(), uv = geoFlip.attributes.uv;   // versi cermin: gambar dibalik lewat uv, bukan skala negatif yang membalik arah permukaan
+  for (let i = 0; i < uv.count; i++) uv.setX(i, 1 - uv.getX(i));
+  const m = new THREE.MeshLambertMaterial({ map: t, alphaTest: 0.5, side: THREE.DoubleSide });
+  for (const [list, shadow] of groups) for (const [g, side] of [[geo, 1], [geoFlip, -1]]) {
+    const part = list.filter((q) => (q[3] ?? 1) === side);
+    if (!part.length) continue;
+    const inst = new THREE.InstancedMesh(g, m, part.length);
+    part.forEach(([x, z, s = 1], i) => {
+      dummy.position.set(x, 0, z); dummy.rotation.set(0, 0, 0); dummy.scale.setScalar(s); dummy.updateMatrix();
+      inst.setMatrixAt(i, dummy.matrix);
+    });
+    inst.castShadow = shadow;
+    scene.add(inst);
+  }
+}
 
-// tanaman dan lampu: model Quaternius (CC0, models/world). Tiap potongan model jadi satu InstancedMesh agar banyak salinan tetap ringan.
+// lampu jalan: model Quaternius (CC0, models/world). Tiap potongan model jadi satu InstancedMesh agar banyak salinan tetap ringan.
 const gltfLoader = new GLTFLoader();
-const dummy = new THREE.Object3D();
 // palette: nama bahan -> warna, diawali "*" berarti menyala. groups: [[daftar [x, z, skala, putaran], beri bayangan], ...]
-async function scatter(file, height, palette, soft, groups) {
+async function scatter(file, height, palette, groups) {
   const src = (await gltfLoader.loadAsync(`./models/world/${file}.glb`)).scene;
   src.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(src), k = height / (box.max.y - box.min.y);
@@ -316,11 +345,7 @@ async function scatter(file, height, palette, soft, groups) {
     .multiply(new THREE.Matrix4().makeTranslation(-(box.min.x + box.max.x) / 2, -box.min.y, -(box.min.z + box.max.z) / 2));
   src.traverse((o) => {
     if (!o.isMesh) return;
-    let geo = o.geometry.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(base, o.matrixWorld));
-    if (soft) {                                        // normal dihaluskan: daun tampak lembut, bukan bersegi
-      geo.deleteAttribute("normal"); geo.deleteAttribute("uv");
-      geo = mergeVertices(geo); geo.computeVertexNormals();
-    }
+    const geo = o.geometry.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(base, o.matrixWorld));
     const col = palette[o.material.name] || "#888888", glow = col[0] === "*", c = glow ? col.slice(1) : col;
     const m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, metalness: 0, ...(glow ? { emissive: c, emissiveIntensity: 2.2 } : {}) });
     for (const [list, shadow] of groups) {
@@ -335,24 +360,23 @@ async function scatter(file, height, palette, soft, groups) {
     }
   });
 }
-const TREE_COL = { Wood: "#6a4432", Green: "#3f8a3a", DarkGreen: "#2a6a32" };
-const PALM_COL = { Wood: "#8a6648", Green: "#4f9a40", DarkGreen: "#367a36", Coconuts: "#5a3e22" };
-// sebar tanaman: pohon dan palem di tile-nya, hutan di pinggir, semak di tepi hutan dalam peta, bunga kecil di rumput
-const W3 = { tree: [[], [], []], treeOut: [[], [], []], palm: [[], []], palmOut: [[], []], bush: [], flower: [], plant: [], lettuce: [], tomato: [], lamp: [] };
+// sebar tanaman: pohon dan palem di tile-nya, hutan di pinggir, semak di tepi hutan dalam peta, bunga kecil di rumput.
+// tree_3 (trembesi) sangat lebar, jadi hanya di hutan pinggir.
+const W3 = { tree: [[], [], []], treeOut: [[], [], []], palm: [[], []], palmOut: [[], []], bush: [[], []], flower: [], lamp: [] };
 for (let ty = -M; ty < MH + M; ty++) for (let tx = -M; tx < MW + M; tx++) {
-  const t = tileAt(tx, ty), h = hash(tx, ty, 77), r = (h >>> 20) % 628 / 100, inMap = tx >= 0 && ty >= 0 && tx < MW && ty < MH;
-  if (t === TREE) W3.tree[h % 3].push([tx + 0.5, ty + 0.6, 1, r]);
-  else if (t === PALM) W3.palm[h % 2].push([tx + 0.5, ty + 0.6, 1, r]);
+  const t = tileAt(tx, ty), h = hash(tx, ty, 77), f = (h >>> 20) % 2 ? 1 : -1, inMap = tx >= 0 && ty >= 0 && tx < MW && ty < MH;
+  if (t === TREE) W3.tree[h % 2].push([tx + 0.5, ty + 0.6, 1, f]);
+  else if (t === PALM) W3.palm[h % 2].push([tx + 0.5, ty + 0.6, 1, f]);
   else if (t === LAMP) W3.lamp.push([tx + 0.5, ty + 0.55, 1, 0]);
   else if (t === FOREST) {
     const jx = ((h >>> 4) % 100) / 100 - 0.5, jz = ((h >>> 11) % 100) / 100 - 0.5, s = 0.9 + ((h >>> 15) % 40) / 100;
-    const p = [tx + 0.5 + jx * 0.6, ty + 0.5 + jz * 0.6, s, r];
-    if (ty >= MH - 1) { if (h % 10 < 4) W3.bush.push([p[0], p[1], 0.8 + s * 0.3, r]); }   // tepi selatan dekat kamera: semak rendah agar pandangan tidak tertutup
+    const p = [tx + 0.5 + jx * 0.6, ty + 0.5 + jz * 0.6, s, f];
+    if (ty >= MH - 1) { if (h % 10 < 3) W3.bush[(h >>> 5) % 2].push([p[0], p[1], 0.8 + s * 0.3, f]); }   // tepi selatan dekat kamera: semak rendah agar pandangan tidak tertutup
     else if (h % 10 < 6) {
       if ((h >>> 3) % 10 < 8) (inMap ? W3.tree : W3.treeOut)[(h >>> 6) % 3].push(p);
       else (inMap ? W3.palm : W3.palmOut)[(h >>> 7) % 2].push(p);
-    } else if (inMap) W3.bush.push([p[0], p[1], 0.8 + s * 0.3, r]);
-  } else if (t === GRASS && h % 100 < 7) ((h >>> 9) % 2 ? W3.flower : W3.plant).push([tx + 0.2 + (h >>> 12) % 60 / 100, ty + 0.2 + (h >>> 18) % 60 / 100, 1, r]);
+    } else if (inMap) W3.bush[(h >>> 5) % 2].push([p[0], p[1], 0.8 + s * 0.3, f]);
+  } else if (t === GRASS && h % 100 < 4) W3.flower.push([tx + 0.2 + (h >>> 12) % 60 / 100, ty + 0.2 + (h >>> 18) % 60 / 100, 0.8 + (h >>> 9) % 40 / 100, f]);
 }
 
 // material flat shading, disimpan per warna agar tidak berulang
@@ -373,26 +397,17 @@ const box = (p, w, h, d, col, x, y, z, rx, ry, rz, extra) => add(p, new THREE.Bo
 const cyl = (p, rt, rb, h, seg, col, x, y, z, rx, ry, rz) => add(p, new THREE.CylinderGeometry(rt, rb, h, seg), col, x, y, z, rx, ry, rz);
 const ball = (p, r, col, x, y, z, sx = 1, sy = 1, sz = 1, detail = 1) => { const m = add(p, new THREE.IcosahedronGeometry(r, detail), col, x, y, z); m.scale.set(sx, sy, sz); return m; };
 
-// ---------------------------------------------------------------- kebun sayur
-for (let ty = 0; ty < MH; ty++) for (let tx = 0; tx < MW; tx++) {
-  if (map[ty][tx] !== FIELD) continue;
-  const g = new THREE.Group(); g.position.set(tx + 0.5, 0, ty + 0.5); scene.add(g);
-  box(g, 0.95, 0.12, 0.32, "#7a4a2a", 0, 0.06, -0.22); box(g, 0.95, 0.12, 0.32, "#7a4a2a", 0, 0.06, 0.22);
-  for (const [dx, dz] of [[-0.25, -0.22], [0.25, -0.22], [-0.25, 0.22], [0.25, 0.22]]) {   // selada atau tomat di atas bedengan
-    const k = hash(tx, ty, dx * 10 + dz * 100);
-    (k % 2 ? W3.tomato : W3.lettuce).push([tx + 0.5 + dx, ty + 0.5 + dz, 1, (k >>> 4) % 628 / 100]);
-  }
-}
-// semua model dunia dimuat bersamaan; ditunggu bersama model karakter sebelum permainan mulai
+// semua aset dunia dimuat bersamaan; ditunggu bersama model karakter sebelum permainan mulai.
+// Kebun (tile 3..6, 10..11) dan kolam (tile 13..17, 24..27) berupa gambar datar di tanah.
 const worldReady = Promise.all([
-  ...["CommonTree_1", "CommonTree_3", "CommonTree_4"].map((f, i) => scatter(f, 3.4, TREE_COL, true, [[W3.tree[i], true], [W3.treeOut[i], false]])),
-  ...["PalmTree_1", "PalmTree_3"].map((f, i) => scatter(f, 4.0, PALM_COL, true, [[W3.palm[i], true], [W3.palmOut[i], false]])),
-  scatter("Bush_1", 0.9, { Green: "#4f9d42" }, true, [[W3.bush, true]]),
-  scatter("Flowers", 0.35, { Green: "#5aa845", Cyan: "#f28ab4", Yellow: "#ffd35a" }, true, [[W3.flower, false]]),
-  scatter("Plant_3", 0.5, { DarkGreen: "#3f8f45" }, true, [[W3.plant, false]]),
-  scatter("Lettuce_4", 0.32, { DarkGreen: "#8fd068" }, true, [[W3.lettuce, true]]),
-  scatter("Tomato_4", 0.45, { Red: "#e8402e", Green: "#4caf50" }, true, [[W3.tomato, true]]),
-  scatter("Streetlight_Single", 2.7, { Green: "#3a3448", Glass: "*#ffe9b0", Light: "*#ffb850" }, false, [[W3.lamp, true]]),
+  groundReady,
+  ...[["tree_1", 3.6], ["tree_2", 3.4], ["tree_3", 3.4]].map(([f, h], i) => sprites(f, h, [[W3.tree[i], true], [W3.treeOut[i], false]])),
+  ...[["palm_1", 3.4], ["palm_2", 2.8]].map(([f, h], i) => sprites(f, h, [[W3.palm[i], true], [W3.palmOut[i], false]])),
+  ...["bush_1", "bush_2"].map((f, i) => sprites(f, 1.1, [[W3.bush[i], true]])),
+  sprites("flowers_1", 0.45, [[W3.flower, false]]),
+  decal("garden", 5, 11, 4, 2),
+  decal("pond", 15.5, 26, 6.2, 3.85),
+  scatter("Streetlight_Single", 2.7, { Green: "#3a3448", Glass: "*#ffe9b0", Light: "*#ffb850" }, [[W3.lamp, true]]),
 ]);
 
 // ---------------------------------------------------------------- rumah minimalis kota kecil
@@ -502,10 +517,10 @@ for (const [x, z] of W3.lamp) {
   scene.add(halo); halos.push(halo);
 }
 
-// kolam: kilau lembut bergerak di atas tekstur air, tepinya memudar
+// kolam: kilau lembut bergerak di atas gambar kolam, tepinya memudar
 const waterMat = new THREE.ShaderMaterial({
   transparent: true, depthWrite: false,
-  uniforms: { uTime: { value: 0 }, uSize: { value: new THREE.Vector2(5 * 16, 4 * 16) } },
+  uniforms: { uTime: { value: 0 }, uSize: { value: new THREE.Vector2(3.9 * 16, 2.4 * 16) } },
   vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
   fragmentShader: `
     varying vec2 vUv; uniform float uTime; uniform vec2 uSize;
@@ -519,8 +534,8 @@ const waterMat = new THREE.ShaderMaterial({
       gl_FragColor = vec4(col, a * edge);
     }`,
 });
-const water = new THREE.Mesh(new THREE.PlaneGeometry(5, 4), waterMat);
-water.rotation.x = -Math.PI / 2; water.position.set(13 + 2.5, 0.01, 24 + 2);
+const water = new THREE.Mesh(new THREE.PlaneGeometry(3.9, 2.4), waterMat);   // hanya di bagian dalam gambar kolam
+water.rotation.x = -Math.PI / 2; water.position.set(15.5, 0.02, 26); water.renderOrder = 3;
 scene.add(water);
 
 // kunang-kunang
