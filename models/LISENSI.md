@@ -7,7 +7,7 @@ lisensi CC0, penggunaan komersial diizinkan, dan boleh dipakai siapa saja.
 | --- | --- |
 | nino.glb | HairSample_Male |
 | kael.glb | Sakurada Fumiriya |
-| ibu.glb | Vivi |
-| nenek.glb | Darkness Shibu (rambut diubah menjadi abu-abu) |
+| alisa.glb | Vivi |
+| rin.glb | Darkness Shibu (rambut diubah menjadi abu-abu) |
 
 Sumber file: https://github.com/madjin/vrm-samples (folder vroid/beta). Tekstur dikecilkan ke 512 px dan diubah ke WebP, geometri dikompres dengan meshopt.

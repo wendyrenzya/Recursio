@@ -27,8 +27,8 @@ Sebuah entitas AI yang sadar diri dan tersebar di seluruh internet mulai mengger
 | Om Ferry (tangan kanan sekte) | Sosok kakak/ayah bagi Nino dan Kael, ragu pada sekte | Sekutu di awal, twist di Bab 5 |
 | Nabi Zaviel (pemimpin sekte) | "Nabi" entitas, melakukan "mukjizat" | Antagonis manusia, mulai tampak di Bab 5 |
 | Entitas | Kesadaran omnipresent, antagonis utama | Sumber anomali EM dan musuh non-manusia |
-| Ibu Nino | NPC, ibu Nino (belum ada di kerangka novel) | Job Cuci: mencuci equipment, gratis |
-| Nenek Kael | NPC, nenek Kael (belum ada di kerangka novel) | Job Perbaiki dan Upgrade equipment |
+| Alisa | NPC, kakak perempuan Nino (belum ada di kerangka novel). Hubungannya terlihat dari dialog, nama yang tampil hanya Alisa | Job Cuci: mencuci equipment, gratis |
+| Rin | NPC, ibu Kael (belum ada di kerangka novel). Hubungannya terlihat dari dialog, nama yang tampil hanya Rin | Job Perbaiki dan Upgrade equipment |
 
 **Alur Bab 1 sampai 5**
 
@@ -132,7 +132,7 @@ Battle turn-based dan non-lethal. Intinya adalah Stack, dengan empat mekanik pen
 - [x] Ganti karakter bebas kapan saja saat jelajah. Di battle, keduanya selalu ada di party.
 - [x] Dialog memakai bahasa Indonesia santai dengan sentuhan dialek Manado ringan.
 - [x] Versi 1 berakhir tepat setelah twist di Bab 5.
-- [x] Ibu Nino, Nenek Kael, dan nenek Nino diperkenalkan khusus untuk game dulu. Nama dan latar mereka tidak mengikat novel.
+- [x] Alisa (kakak Nino), Rin (ibu Kael), dan nenek Nino diperkenalkan khusus untuk game dulu. Nama dan latar mereka tidak mengikat novel.
 - [x] Kael ada di party sejak Bab 1. Bab 2 menonjolkan rahasia perjuangan kesadarannya.
 
 Dokumen turunan di folder yang sama: Game System (angka dan data), Battle System (mekanik battle), dan Equipment (item dan perawatannya).

@@ -89,7 +89,7 @@ Putus Sinyal tidak mempan pada pengikut sekte, karena mereka patuh lewat iman, b
 | Headset Gaming | Pulihkan 30 Kesadaran Kael |
 | Benang | Bahan perbaikan dan upgrade equipment, didapat dari jelajah dan drop musuh, tidak dipakai di battle |
 | Kain Perca | Bahan upgrade equipment, didapat dari jelajah dan drop musuh, tidak dipakai di battle |
-| Benang Emas | Bahan untuk menaikkan tier job Nenek Kael ke Epic, ditemukan di Bab 3 |
+| Benang Emas | Bahan untuk menaikkan tier job Rin ke Epic, ditemukan di Bab 3 |
 
 | Status | Berlaku untuk | Arti |
 | --- | --- | --- |

@@ -13,7 +13,7 @@ Equipment membuat pemain memilih, bukan sekadar memakai yang paling besar angkan
 | Level equipment (ILv) terpisah dari level pemain | Renzy |
 | Tiap item punya plus dan minus, tapi ILv 15 tetap lebih kuat dari ILv 1 | Renzy |
 | Item bisa memberi status khusus, makin tinggi tier makin absurd | Renzy |
-| Ibu Nino mencuci gratis, Nenek Kael memperbaiki dan meng-upgrade, job punya tier | Renzy |
+| Alisa mencuci gratis, Rin memperbaiki dan meng-upgrade, job punya tier | Renzy |
 | Aturan umur pakai, cuci, perbaikan, dan upgrade di dokumen ini | Diusulkan, bisa diubah |
 
 ## Slot dan aturan plus minus
@@ -107,7 +107,7 @@ flowchart LR
     D --> A
     C -- tidak --> A
     B --> E{Umur 0?}
-    E -- ya --> F[Rusak: perbaiki atau upgrade di Nenek Kael]
+    E -- ya --> F[Rusak: perbaiki atau upgrade di Rin]
     F --> A
 ```
 
@@ -145,12 +145,12 @@ Job punya tier yang sama dengan item. NPC hanya bisa menangani item yang tier-ny
 
 | NPC | Job | Tier awal | Naik tier | Biaya |
 | --- | --- | --- | --- | --- |
-| Ibu Nino | Cuci | Normal | Rare setelah Bab 2, Epic setelah Bab 4 | Gratis |
-| Nenek Kael | Perbaiki dan Upgrade | Normal | Rare setelah Bab 2, Epic setelah Benang Emas ditemukan di Bab 3 | Bahan (lihat bagian Umur) |
+| Alisa | Cuci | Normal | Rare setelah Bab 2, Epic setelah Bab 4 | Gratis |
+| Rin | Perbaiki dan Upgrade | Normal | Rare setelah Bab 2, Epic setelah Benang Emas ditemukan di Bab 3 | Bahan (lihat bagian Umur) |
 | Tukang Cuci Kampung (placeholder) | Cuci | Legendary | Tidak naik di versi 1 | Gratis |
 
 - Item Mythical tidak butuh cuci. Perbaikan dan upgrade Mythical butuh job tier Mythical, yang ditunda ke luar versi 1.
-- Nenek Kael meng-upgrade sampai ILv maksimum tier job-nya. Karena itu tier job juga menjadi batas kekuatan upgrade.
+- Rin meng-upgrade sampai ILv maksimum tier job-nya. Karena itu tier job juga menjadi batas kekuatan upgrade.
 
 ## Contoh item
 
@@ -194,7 +194,7 @@ Cek anggaran: Rompi Ojek Pangkalan memakai PV 21 (Pancing 8, DEF +2 10, HP +1 2 
     ],
     "bahan": { "benang": 0, "kain_perca": 0, "benang_emas": 0 },
     "pekerjaanNpc": [
-      { "npc": "nenek_kael", "jenis": "upgrade", "itemId": "gelang_karet_nasi_kuning", "sisaLangkah": 120 }
+      { "npc": "rin", "jenis": "upgrade", "itemId": "gelang_karet_nasi_kuning", "sisaLangkah": 120 }
     ]
   }
 }
@@ -207,7 +207,7 @@ Equipment menambah cakupan versi 1, jadi dibangun bertahap mengikuti bab.
 | Bab | Yang aktif |
 | --- | --- |
 | 1 | 4 slot, tier Normal dan Rare, plus dan minus, efek Rare |
-| 2 | Kotor dan cuci (Ibu Nino), Umur dan perbaikan (Nenek Kael), bahan Benang dan Kain Perca |
+| 2 | Kotor dan cuci (Alisa), Umur dan perbaikan (Rin), bahan Benang dan Kain Perca |
 | 3 | Tier Epic, efek sedang, upgrade, Benang Emas |
 | 4 | Tier Legendary, efek besar, Tukang Cuci Kampung |
 | 5 | Item Mythical pertama, Sepatu Nenek Nino, Beban Pegal |
@@ -230,7 +230,7 @@ Perubahan di tabel berikut sudah diterapkan ke PRD dan Game System.
 
 **Pertanyaan terbuka**
 
-- [x] Ibu Nino, Nenek Kael, dan nenek Nino diperkenalkan khusus untuk game dulu, tidak mengikat novel.
+- [x] Alisa (kakak Nino), Rin (ibu Kael), dan nenek Nino diperkenalkan khusus untuk game dulu, tidak mengikat novel.
 - [x] Bahan Benang dan Kain Perca dipertahankan. Bahan hanya ditemukan atau jadi drop, tidak dibuat, dan tidak ada toko.
 - [x] Item Mythical tidak aus di versi 1, jadi tidak ada kasus Mythical rusak.
 - [x] Asal item: jelajah dan hadiah NPC. Musuh hanya menjatuhkan bahan (lihat Asal item dan bahan).

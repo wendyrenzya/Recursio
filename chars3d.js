@@ -15,9 +15,9 @@ const M10 = { blink: 10, eyeJoy: 13, mthFun: 29, brwSorrow: 6 }, M12 = { blink: 
 const CHARS = {
   nino: { name: "Nino", height: 1.6, tint: { Tops: "#f06a1c" }, morph: M10 },
   kael: { name: "Kael", height: 1.66, morph: M10 },
-  ibu: { name: "Ibu Nino", height: 1.6, morph: M12, tint: { Tops: "#d6c2ae", Shoes: "#8a6a58", EyeIris: "#a07c5c" },
+  alisa: { name: "Alisa", height: 1.6, morph: M12, tint: { Tops: "#d6c2ae", Shoes: "#8a6a58", EyeIris: "#a07c5c" },
     face: { eyeJoy: 0.2, mthFun: 0.3 } },
-  nenek: { name: "Nenek Kael", height: 1.46, grey: ["Hair", "FaceBrow"], hunch: 0.2, morph: M12, tint: { Tops: "#c8aa94" },
+  rin: { name: "Rin", height: 1.46, grey: ["Hair", "FaceBrow"], hunch: 0.2, morph: M12, tint: { Tops: "#c8aa94" },
     face: { eyeJoy: 1, mthFun: 0.5, brwSorrow: 0.35 }, glasses: true,
     head: { cx: 0, sx: 0.0946, ey: 1.313, h: 0.0843, fz: 0.0974, back: -0.112 },
     bun: { y: 1.15, size: 0.5, base: "#cfd1da", light: "rgba(255,255,255,0.35)", dark: "rgba(120,124,140,0.3)", pin: true } },

@@ -5,15 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Recursio</title>
 <link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&display=swap" rel="stylesheet">
 <style>
   html, body { margin: 0; height: 100%; background: #0b0b14; overflow: hidden; overscroll-behavior: none; }
-  #wrap { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
-  #gl, #ui { position: absolute; left: 0; top: 0; display: block; touch-action: none; }
-  #ui { image-rendering: pixelated; pointer-events: none; }
+  #wrap { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+          font-family: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif; font-weight: 600; font-size: calc(var(--w, 360px) * 0.043); }
+  #gl { position: absolute; left: 0; top: 0; display: block; touch-action: none; }
+  /* kotak dialog: panel biru tembus pandang bersudut bulat, kartu nama emas, panah lanjut */
+  #dlg { display: none; position: absolute; left: 3.5%; right: 3.5%; bottom: 3%; min-height: 22%; box-sizing: border-box;
+         padding: 1.5em 1.2em 1.2em; border-radius: 0.9em; color: #f4f4ff; line-height: 1.5; pointer-events: none;
+         background: linear-gradient(180deg, rgba(38, 46, 98, 0.9), rgba(18, 20, 52, 0.93));
+         border: 1px solid rgba(190, 200, 255, 0.35); box-shadow: 0 0.4em 1.4em rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.15); }
+  #dlgName { position: absolute; top: -0.9em; left: 1em; padding: 0.2em 0.95em; border-radius: 99px; font-weight: 800; font-size: 0.92em;
+             color: #3a2a14; background: linear-gradient(#ffe39a, #f2bf4a); box-shadow: 0 0.15em 0.5em rgba(0, 0, 0, 0.35); }
+  #dlgNext { position: absolute; right: 1.1em; bottom: 0.7em; border-left: 0.45em solid transparent; border-right: 0.45em solid transparent;
+             border-top: 0.55em solid #f4cf5a; }
+  #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #e8e8f4; letter-spacing: 0.05em; pointer-events: none; }
 </style>
 </head>
 <body>
-<div id="wrap"><canvas id="gl"></canvas><canvas id="ui" width="180" height="320"></canvas></div>
+<div id="wrap"><canvas id="gl"></canvas><div id="loading">Memuat...</div><div id="dlg"><div id="dlgName"></div><div id="dlgText"></div><div id="dlgNext"></div></div></div>
 <script type="module">
 import * as THREE from "./lib/three.module.min.js";
 import { loadChar } from "./chars3d.js";
@@ -22,7 +35,7 @@ import { mergeVertices } from "./lib/BufferGeometryUtils.js";
 
 // ================================================================ dasar
 // Logika memakai satuan piksel tile 16. Dunia 3D memakai 1 unit = 1 tile.
-const VW = 180, VH = 320, TS = 16, SPEED = 64;
+const TS = 16, SPEED = 64;
 const GRASS = 0, ROAD = 1, HOUSE = 2, TREE = 3, WATER = 4, FOREST = 5, PALM = 6, LAMP = 7, FIELD = 8;   // tipe > 1 menghalangi jalan
 
 const hash = (x, y, s = 0) => {
@@ -31,60 +44,6 @@ const hash = (x, y, s = 0) => {
   return (h ^ (h >>> 16)) >>> 0;
 };
 const mk = (w, h) => { const c = document.createElement("canvas"); c.width = w; c.height = h; return c; };
-const P = (c, col, x, y) => { c.fillStyle = col; c.fillRect(x, y, 1, 1); };
-const R = (c, col, x, y, w, h) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
-
-// ================================================================ font bitmap 5x7
-// Tiap karakter 7 baris (9 untuk huruf berekor g j p q y), 5 bit per baris.
-const FONT_SRC = {
-  " ": "00 00 00 00 00 00 00",
-  "A": "0E 11 11 1F 11 11 11", "B": "1E 11 11 1E 11 11 1E", "C": "0E 11 10 10 10 11 0E",
-  "D": "1E 11 11 11 11 11 1E", "E": "1F 10 10 1E 10 10 1F", "F": "1F 10 10 1E 10 10 10",
-  "G": "0E 11 10 17 11 11 0F", "H": "11 11 11 1F 11 11 11", "I": "0E 04 04 04 04 04 0E",
-  "J": "07 02 02 02 02 12 0C", "K": "11 12 14 18 14 12 11", "L": "10 10 10 10 10 10 1F",
-  "M": "11 1B 15 15 11 11 11", "N": "11 11 19 15 13 11 11", "O": "0E 11 11 11 11 11 0E",
-  "P": "1E 11 11 1E 10 10 10", "Q": "0E 11 11 11 15 12 0D", "R": "1E 11 11 1E 14 12 11",
-  "S": "0F 10 10 0E 01 01 1E", "T": "1F 04 04 04 04 04 04", "U": "11 11 11 11 11 11 0E",
-  "V": "11 11 11 11 11 0A 04", "W": "11 11 11 15 15 15 0A", "X": "11 11 0A 04 0A 11 11",
-  "Y": "11 11 11 0A 04 04 04", "Z": "1F 01 02 04 08 10 1F",
-  "a": "00 00 0E 01 0F 11 0F", "b": "10 10 16 19 11 11 1E", "c": "00 00 0E 10 10 11 0E",
-  "d": "01 01 0D 13 11 11 0F", "e": "00 00 0E 11 1F 10 0E", "f": "06 09 08 1C 08 08 08",
-  "g": "00 00 0F 11 11 11 0F 01 0E", "h": "10 10 16 19 11 11 11", "i": "04 00 0C 04 04 04 0E",
-  "j": "02 00 06 02 02 02 02 12 0C", "k": "10 10 12 14 18 14 12", "l": "0C 04 04 04 04 04 0E",
-  "m": "00 00 1A 15 15 11 11", "n": "00 00 16 19 11 11 11", "o": "00 00 0E 11 11 11 0E",
-  "p": "00 00 1E 11 11 11 1E 10 10", "q": "00 00 0F 11 11 11 0F 01 01", "r": "00 00 16 19 10 10 10",
-  "s": "00 00 0E 10 0E 01 1E", "t": "08 08 1C 08 08 09 06", "u": "00 00 11 11 11 13 0D",
-  "v": "00 00 11 11 11 0A 04", "w": "00 00 11 11 15 15 0A", "x": "00 00 11 0A 04 0A 11",
-  "y": "00 00 11 11 11 11 0F 01 0E", "z": "00 00 1F 02 04 08 1F",
-  "0": "0E 11 13 15 19 11 0E", "1": "04 0C 04 04 04 04 0E", "2": "0E 11 01 02 04 08 1F",
-  "3": "1F 02 04 02 01 11 0E", "4": "02 06 0A 12 1F 02 02", "5": "1F 10 1E 01 01 11 0E",
-  "6": "06 08 10 1E 11 11 0E", "7": "1F 01 02 04 08 08 08", "8": "0E 11 11 0E 11 11 0E",
-  "9": "0E 11 11 0F 01 02 0C",
-  ".": "00 00 00 00 00 0C 0C", ",": "00 00 00 00 0C 04 08", "!": "04 04 04 04 04 00 04",
-  "?": "0E 11 01 02 04 00 04", ":": "00 0C 0C 00 0C 0C 00", "'": "0C 04 08 00 00 00 00",
-  "-": "00 00 00 1F 00 00 00", "(": "02 04 08 08 08 04 02", ")": "08 04 02 02 02 04 08",
-};
-const FONT = {};
-for (const [ch, src] of Object.entries(FONT_SRC)) {
-  const rows = src.split(" ").map((h) => parseInt(h, 16));
-  let w = 0;
-  for (const r of rows) for (let b = 0; b < 5; b++) if (r & (16 >> b)) w = Math.max(w, b + 1);
-  FONT[ch] = { rows, w: ch === " " ? 3 : w };
-}
-const textW = (s) => [...s].reduce((a, ch) => a + (FONT[ch] || FONT["?"]).w + 1, 0) - 1;
-function drawText(c, s, x, y, col, shadow) {
-  let cx = x;
-  for (const ch of s) {
-    const g = FONT[ch] || FONT["?"];
-    g.rows.forEach((r, j) => {
-      for (let b = 0; b < g.w; b++) if (r & (16 >> b)) {
-        if (shadow) P(c, shadow, cx + b + 1, y + j + 1);
-        P(c, col, cx + b, y + j);
-      }
-    });
-    cx += g.w + 1;
-  }
-}
 
 // ================================================================ peta
 const MW = 20, MH = 32, M = 8;   // M: lebar hutan di luar peta, hanya untuk pemandangan
@@ -97,7 +56,7 @@ fill(1, 20, 18, 2, ROAD);                                     // jalan melintang
 fill(3, 4, 4, 3, HOUSE);  fill(4, 7, 6, 1, ROAD);             // rumah Nino dan jalannya
 fill(13, 4, 4, 3, HOUSE); fill(10, 7, 6, 1, ROAD);            // rumah Kael dan jalannya
 fill(13, 24, 5, 4, WATER);                                    // kolam
-fill(3, 10, 4, 2, FIELD);                                     // kebun sayur Ibu Nino
+fill(3, 10, 4, 2, FIELD);                                     // kebun sayur Alisa
 const put = (t, pts) => pts.forEach(([x, y]) => { map[y][x] = t; });
 put(TREE, [[2, 13], [3, 15], [15, 12], [17, 14], [16, 17], [2, 17], [6, 28], [17, 19]]);
 put(PALM, [[7, 11], [13, 11], [1, 24], [4, 25], [12, 29], [18, 23], [7, 16], [14, 17], [2, 28]]);
@@ -146,7 +105,11 @@ function buildGround() {
   const c = cv.getContext("2d");
   stamp(c, paintLayer("#2f6b37", [[[30, 80, 40], 0.5], [[60, 110, 50], 0.4]], ["rgba(20,50,25,0.4)"], 2), softMask((x, y) => tileAt(x, y) === FOREST, 16));
   stamp(c, paintLayer("#7a5034", [[[100, 70, 45], 0.4]], ["rgba(60,38,24,0.5)", "rgba(150,110,75,0.4)"], 3), softMask((x, y) => tileAt(x, y) === FIELD, 3));
-  stamp(c, paintLayer("#c9a06a", [[[215, 180, 130], 0.45], [[170, 130, 85], 0.35]], ["rgba(120,88,60,0.5)", "rgba(235,210,165,0.5)"], 4), softMask(isRoadLike, 6));
+  stamp(c, paintLayer("#b8b4ac", [[[205, 200, 190], 0.4]], ["rgba(140,136,128,0.5)"], 7), softMask(isRoadLike, 5));   // bahu jalan semen
+  stamp(c, paintLayer("#5a5d64", [[[80, 84, 92], 0.4], [[60, 62, 68], 0.4]], ["rgba(40,42,48,0.5)", "rgba(130,134,140,0.4)"], 4), softMask(isRoadLike, 1));   // aspal
+  c.fillStyle = "rgba(240,240,232,0.85)";             // marka putus-putus di jalan utama dan jalan melintang
+  for (let y = (1 + M) * GP; y < (MH - 1 + M) * GP; y += 48) if (Math.floor(y / GP) - M < 19 || Math.floor(y / GP) - M > 22) c.fillRect((10 + M) * GP - 2, y, 4, 26);
+  for (let x = (1 + M) * GP; x < (MW - 1 + M) * GP; x += 48) if (Math.floor(x / GP) - M < 8 || Math.floor(x / GP) - M > 11) c.fillRect(x, (21 + M) * GP - 2, 26, 4);
   stamp(c, paintLayer("#e3d3a2", [[[240, 225, 180], 0.4]], ["rgba(190,170,120,0.4)"], 5), softMask((x, y) => tileAt(x, y) === WATER, 14));   // pasir di tepi kolam
   stamp(c, paintLayer("#3a7fc0", [[[70, 150, 210], 0.5], [[30, 90, 160], 0.4]], [], 6), softMask((x, y) => tileAt(x, y) === WATER, 4));
   for (let i = 0; i < 9000; i++) {                    // helai rumput pendek
@@ -158,42 +121,33 @@ function buildGround() {
   return cv;
 }
 
-// ================================================================ tekstur atap halus (256 piksel = 2 tile)
-function roofCanvas(style) {
+// ================================================================ tekstur atap genteng beton (256 piksel = 2 tile), satu warna untuk semua rumah
+function roofCanvas() {
   const S = 256, cv = mk(S, S), c = cv.getContext("2d");
-  if (style === "tin") {                              // seng bergelombang: gradasi tiap alur
-    for (let x = 0; x < S; x += 16) {
-      const g = c.createLinearGradient(x, 0, x + 16, 0);
-      g.addColorStop(0, "#8a98ad"); g.addColorStop(0.5, "#c9d4e0"); g.addColorStop(1, "#66748a");
-      c.fillStyle = g; c.fillRect(x, 0, 16, S);
-    }
-    c.fillStyle = "rgba(60,70,85,0.5)"; c.fillRect(0, S / 2 - 2, S, 3); c.fillRect(0, S - 3, S, 3);   // sambungan lembaran
-  } else {                                            // genteng tanah liat membulat, baris bergeser
-    c.fillStyle = "#7a3028"; c.fillRect(0, 0, S, S);
-    for (let row = 0; row < 8; row++) for (let i = -1; i < 9; i++) {
-      const x = i * 32 + (row % 2) * 16, y = row * 32;
-      const g = c.createLinearGradient(x, 0, x + 32, 0);
-      g.addColorStop(0, "#a8463a"); g.addColorStop(0.45, "#dc785c"); g.addColorStop(1, "#8a352c");
-      c.fillStyle = g; c.beginPath(); c.roundRect(x + 1, y, 30, 31, [0, 0, 12, 12]); c.fill();
-      c.fillStyle = "rgba(60,20,20,0.3)"; c.fillRect(x + 1, y, 30, 4);
-    }
+  c.fillStyle = "#3e4652"; c.fillRect(0, 0, S, S);
+  for (let row = 0; row < 8; row++) for (let i = -1; i < 9; i++) {
+    const x = i * 32 + (row % 2) * 16, y = row * 32;
+    const g = c.createLinearGradient(0, y, 0, y + 32);
+    g.addColorStop(0, "#56606e"); g.addColorStop(0.7, "#6a7482"); g.addColorStop(1, "#4a535f");
+    c.fillStyle = g; c.fillRect(x + 1, y + 1, 30, 30);
+    c.fillStyle = "rgba(255,255,255,0.08)"; c.fillRect(x + 1, y + 1, 30, 3);
   }
   return cv;
 }
 
 // ================================================================ keadaan permainan
 const NPCS = [
-  { name: "Ibu Nino", tx: 6, ty: 8, char: "ibu", dir: "down",
+  { name: "Alisa", tx: 6, ty: 8, char: "alisa", dir: "down",
     lines: [
-      "Nino, so malam baru pulang. Torang so masak ikan cakalang, makan dulu.",
-      "Ibu dengar gempa makin sering. HP-mu juga sering error to?",
-      "Kalau bajumu so kotor, bawa ke Ibu. Ibu cuci, gratis.",
+      "Nino, ngana so pulang? Kakak so masak ikan cakalang, makan dulu.",
+      "Kakak dengar gempa makin sering. HP-mu juga sering error to?",
+      "Kalau ngana pe baju so kotor, bawa ke Kakak. Kakak cuci, gratis.",
     ] },
-  { name: "Nenek Kael", tx: 12, ty: 8, char: "nenek", dir: "down",
+  { name: "Rin", tx: 12, ty: 8, char: "rin", dir: "down",
     lines: [
       "Oh, Nino. Kael ada di dalam, main game terus dari tadi.",
-      "Anak itu kelihatan malas, tapi Nenek tahu dia sedang berjuang.",
-      "Kalau ada yang rusak, bawa ke Nenek. Nenek perbaiki.",
+      "Tante pe anak itu kelihatan malas, mar Tante tahu dia sedang berjuang.",
+      "Kalau ada barang rusak, bawa ke Tante. Tante perbaiki.",
     ] },
 ];
 const npcAt = (x, y) => NPCS.find((n) => n.tx === x && n.ty === y);
@@ -317,8 +271,6 @@ function updateCamera() {
 
 // ================================================================ dunia 3D
 const glCanvas = document.getElementById("gl");
-const uiCanvas = document.getElementById("ui");
-const ctx = uiCanvas.getContext("2d");
 const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: false, powerPreference: "high-performance" });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
@@ -423,7 +375,6 @@ function add(parent, geo, color, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, ex
 const box = (p, w, h, d, col, x, y, z, rx, ry, rz, extra) => add(p, new THREE.BoxGeometry(w, h, d), col, x, y, z, rx, ry, rz, extra);
 const cyl = (p, rt, rb, h, seg, col, x, y, z, rx, ry, rz) => add(p, new THREE.CylinderGeometry(rt, rb, h, seg), col, x, y, z, rx, ry, rz);
 const ball = (p, r, col, x, y, z, sx = 1, sy = 1, sz = 1, detail = 1) => { const m = add(p, new THREE.IcosahedronGeometry(r, detail), col, x, y, z); m.scale.set(sx, sy, sz); return m; };
-const cone = (p, r, h, seg, col, x, y, z, rx, ry, rz) => add(p, new THREE.ConeGeometry(r, h, seg), col, x, y, z, rx, ry, rz);
 
 // ---------------------------------------------------------------- kebun sayur
 for (let ty = 0; ty < MH; ty++) for (let tx = 0; tx < MW; tx++) {
@@ -447,131 +398,93 @@ const worldReady = Promise.all([
   scatter("Streetlight_Single", 2.7, { Green: "#3a3448", Glass: "*#ffe9b0", Light: "*#ffb850" }, false, [[W3.lamp, true]]),
 ]);
 
-// tekstur papan kayu dan atap bertekstur untuk rumah 3D (16 piksel per tile)
-function plankTex(base, alt, w, h) {               // 256 piksel = 2 tile, 8 papan tegak
-  const S = 256, cv = mk(S, S), c = cv.getContext("2d");
-  for (let i = 0; i < 8; i++) {
-    const x = i * 32;
-    c.fillStyle = i % 2 ? alt : base; c.fillRect(x, 0, 32, S);
-    const g = c.createLinearGradient(x, 0, x + 32, 0);                    // tiap papan sedikit melengkung terkena cahaya
-    g.addColorStop(0, "rgba(255,255,255,0.14)"); g.addColorStop(0.6, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(40,20,10,0.22)");
-    c.fillStyle = g; c.fillRect(x, 0, 32, S);
-    c.fillStyle = "rgba(50,30,20,0.45)"; c.fillRect(x + 30.5, 0, 1.5, S);   // celah antarpapan
-    c.strokeStyle = "rgba(80,50,30,0.13)"; c.lineWidth = 1;                // serat kayu
-    for (let k = 0; k < 5; k++) {
-      const sx = x + 4 + hash(i, k, 3) % 24;
-      c.beginPath(); c.moveTo(sx, 0); c.bezierCurveTo(sx + 3, S * 0.3, sx - 3, S * 0.6, sx + 1, S); c.stroke();
-    }
+// ---------------------------------------------------------------- rumah minimalis kota kecil
+// Tapak 4 x 3 tile, muka ke jalan di selatan. Dinding plester, atap limas genteng beton (warna sama untuk semua rumah),
+// teras bertiang, jendela aluminium bercahaya, pagar tembok rendah berjeruji besi.
+const plasterTex = (() => {                          // plester: bintik halus, warnanya dari warna bahan
+  const cv = mk(128, 128), c = cv.getContext("2d");
+  c.fillStyle = "#f2f2f2"; c.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 1400; i++) {
+    c.fillStyle = hash(i, 1, 51) % 2 ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.7)";
+    c.fillRect(hash(i, 2, 51) % 128, hash(i, 3, 51) % 128, 2, 2);
   }
-  const t = smoothTex(cv, true); t.repeat.set(w * 16 / 32, h * 16 / 32);
-  return t;
-}
-function texRoof(g, w, h, d, y0, z0, tex) {
-  const xa = -w / 2, xb = w / 2, zF = z0 + d / 2 + 0.01, zB = z0 - d / 2 - 0.01, zM = z0, yE = y0 - 0.01, yR = y0 + h + 0.01;
-  const ru = w * 16 / 32, rv = Math.hypot(d / 2, h) * 16 / 32;
+  return smoothTex(cv, true);
+})();
+const roofMat = new THREE.MeshLambertMaterial({ map: smoothTex(roofCanvas(), true), side: THREE.DoubleSide });
+function hipRoof(w, d, h) {                          // atap limas: trapesium depan dan belakang, segitiga di samping
+  const x = w / 2, z = d / 2, r = (w - d) / 2;
+  const A = [-x, 0, z], B = [x, 0, z], C2 = [x, 0, -z], D = [-x, 0, -z], E = [-r, h, 0], F = [r, h, 0];
   const pos = [], uv = [];
-  const quad = (a, b, c, e) => { pos.push(...a, ...b, ...c, ...a, ...c, ...e); uv.push(0, 0, ru, 0, ru, rv, 0, 0, ru, rv, 0, rv); };
-  quad([xa, yE, zF], [xb, yE, zF], [xb, yR, zM], [xa, yR, zM]);
-  quad([xb, yE, zB], [xa, yE, zB], [xa, yR, zM], [xb, yR, zM]);
+  const face = (pts, ax) => pts.forEach((q) => { pos.push(...q); uv.push(q[ax] * 0.5, q[1] * 0.75); });
+  face([A, B, F, A, F, E], 0); face([C2, D, E, C2, E, F], 0); face([D, A, E], 2); face([B, C2, F], 2);
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
   geo.computeVertexNormals();
-  const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: tex, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 }));
-  m.castShadow = m.receiveShadow = true;
-  g.add(m);
+  return geo;
 }
-const roofTex = { clay: smoothTex(roofCanvas("clay"), true), tin: smoothTex(roofCanvas("tin"), true) };
-
-// ---------------------------------------------------------------- rumah panggung Minahasa
-function prism(w, h, d) {                            // atap pelana, bubungan sejajar sumbu x
-  const s = new THREE.Shape();
-  s.moveTo(-d / 2, 0); s.lineTo(d / 2, 0); s.lineTo(0, h); s.lineTo(-d / 2, 0);
-  const g = new THREE.ExtrudeGeometry(s, { depth: w, bevelEnabled: false });
-  g.translate(0, 0, -w / 2); g.rotateY(Math.PI / 2);
-  return g;
+function windowAt(g, x, y, z, w, h, curtain) {       // bingkai aluminium, kaca bercahaya hangat, tirai separuh
+  box(g, w + 0.1, h + 0.1, 0.06, "#2e3238", x, y, z);
+  box(g, w, h, 0.04, "#ffd99a", x, y, z + 0.02, 0, 0, 0, { emissive: "#ffb860", emissiveIntensity: 1.3 });
+  box(g, 0.04, h, 0.03, "#2e3238", x, y, z + 0.05);
+  box(g, w * 0.4, h * 0.85, 0.02, curtain, x - w * 0.27, y + h * 0.05, z + 0.04);
+  box(g, w + 0.2, 0.06, 0.14, "#e8e4dc", x, y - h / 2 - 0.08, z + 0.05);   // ambang jendela
 }
 function buildHouse(tx, tz, st) {
   const g = new THREE.Group();
   g.position.set(tx + 2, 0, tz + 1.5);               // tengah tapak 4 x 3
-  g.scale.set(1.08, 1.35, 1);                        // lebih tinggi agar sebanding dengan karakter
   scene.add(g);
-  const FL = 0.55;                                    // tinggi lantai panggung
-  // tiang dan kisi kolong
-  for (const x of [-1.75, -0.6, 0.6, 1.75]) for (const z of [-1.2, 0.2, 1.3]) cyl(g, 0.07, 0.08, FL, 6, st.post, x, FL / 2, z);
-  box(g, 3.5, FL - 0.08, 0.04, "#3a2a22", 0, FL / 2, 1.28);
-  for (let i = 0; i < 9; i++) {
-    box(g, 0.04, 0.68, 0.03, st.trim2, -1.6 + i * 0.4, FL / 2, 1.31, 0, 0, Math.PI / 4);
-    box(g, 0.04, 0.68, 0.03, st.trim2, -1.6 + i * 0.4, FL / 2, 1.31, 0, 0, -Math.PI / 4);
+  const B0 = 0.22, H = 2.6, Y0 = B0;                 // lantai ditinggikan, tinggi dinding
+  const wallMat = new THREE.MeshLambertMaterial({ color: st.wall, map: plasterTex });
+  const accentMat = new THREE.MeshLambertMaterial({ color: st.accent, map: plasterTex });
+  box(g, 3.9, B0, 2.9, "#b4aea4", 0, B0 / 2, 0);     // pondasi beton
+  box(g, 2.15, 0.02, 0.85, "#ece6da", 0.78, B0 + 0.01, 1.03);   // lantai teras keramik
+  const body = new THREE.Mesh(new THREE.BoxGeometry(3.7, H, 2.0), wallMat);
+  body.position.set(0, Y0 + H / 2, -0.4); g.add(body);
+  const room = new THREE.Mesh(new THREE.BoxGeometry(1.55, H, 0.85), accentMat);   // kamar depan menjorok, warna aksen
+  room.position.set(-1.07, Y0 + H / 2, 1.0); g.add(room);
+  for (let k = 0; k < 5; k++) box(g, 0.08, H - 0.2, 0.04, st.wall, -1.6 + k * 0.1, Y0 + H / 2, 1.44);   // garis vertikal dekoratif
+  windowAt(g, -0.95, Y0 + 1.35, 1.43, 0.85, 1.0, st.curtain);
+  // pintu kayu dan jendela samping pintu
+  box(g, 0.86, 2.0, 0.06, "#2e3238", 0.45, Y0 + 1.0, 0.61);
+  box(g, 0.76, 1.92, 0.05, st.door, 0.45, Y0 + 0.96, 0.63);
+  for (let k = 0; k < 4; k++) box(g, 0.6, 0.02, 0.02, "#4a3020", 0.45, Y0 + 0.5 + k * 0.4, 0.665);
+  box(g, 0.04, 0.2, 0.05, "#d8d8d8", 0.72, Y0 + 1.0, 0.68);
+  windowAt(g, 1.4, Y0 + 1.35, 0.61, 0.7, 0.9, st.curtain);
+  // tiang teras dan balok
+  for (const x of [-0.25, 1.8]) box(g, 0.16, H, 0.16, "#f2efe8", x, Y0 + H / 2, 1.35);
+  box(g, 2.25, 0.18, 0.16, "#f2efe8", 0.78, Y0 + H - 0.09, 1.35);
+  // atap limas satu warna dan lisplang putih
+  const RY = Y0 + H;
+  const roof = new THREE.Mesh(hipRoof(4.5, 3.25, 1.1), roofMat);
+  roof.position.set(0, RY, 0.0); g.add(roof);
+  box(g, 4.52, 0.12, 0.06, "#f2efe8", 0, RY - 0.03, 1.63); box(g, 4.52, 0.12, 0.06, "#f2efe8", 0, RY - 0.03, -1.63);
+  box(g, 0.06, 0.12, 3.28, "#f2efe8", 2.26, RY - 0.03, 0); box(g, 0.06, 0.12, 3.28, "#f2efe8", -2.26, RY - 0.03, 0);
+  box(g, 3.9, 0.06, 2.95, "#e8e4dc", 0, RY - 0.06, 0);   // plafon teras
+  // unit AC di dinding samping, nomor rumah, lampu teras
+  box(g, 0.55, 0.42, 0.25, "#e6e6ea", 1.98, Y0 + 0.6, -0.6);
+  cyl(g, 0.14, 0.14, 0.02, 14, "#9a9aa4", 2.11, Y0 + 0.6, -0.6, 0, 0, Math.PI / 2);
+  box(g, 0.24, 0.16, 0.02, "#2e3238", -0.1, Y0 + 1.95, 0.62);
+  box(g, 0.12, 0.16, 0.12, "#ffe48a", 0.45, Y0 + 2.25, 0.68, 0, 0, 0, { emissive: "#ffcc55", emissiveIntensity: 2.5 });
+  const pl = new THREE.PointLight("#ffa850", 5, 4.5, 2); pl.position.set(0.45, Y0 + 2.1, 1.1); g.add(pl);
+  // pot tanaman di teras
+  for (const x of [0.0, 1.6]) {
+    cyl(g, 0.13, 0.1, 0.24, 10, "#c8643a", x, Y0 + 0.12, 1.15);
+    ball(g, 0.2, "#4f9d42", x, Y0 + 0.38, 1.15, 1, 1.15, 1, 1);
   }
-  box(g, 3.9, 0.12, 2.8, st.floor, 0, FL + 0.06, 0.05);
-  // dinding papan
-  const WY = FL + 0.12, WH = 1.35;
-  const wallTex = plankTex(st.wall, st.wall2, 3.4, WH);
-  const wall = new THREE.Mesh(new THREE.BoxGeometry(3.4, WH, 1.9), new THREE.MeshLambertMaterial({ map: wallTex }));
-  wall.position.set(0, WY + WH / 2, -0.4); g.add(wall);
-  for (const x of [-1.7, 1.7]) box(g, 0.12, WH, 0.12, st.trim, x, WY + WH / 2, 0.56);
-  box(g, 3.5, 0.1, 0.06, st.trim, 0, WY + WH - 0.05, 0.58);
-  // pintu dua daun dan jendela berdaun jalusi
-  box(g, 0.66, 0.92, 0.06, st.trim, 0, WY + 0.46, 0.58);
-  box(g, 0.28, 0.84, 0.04, st.door, -0.15, WY + 0.43, 0.62); box(g, 0.28, 0.84, 0.04, st.door, 0.15, WY + 0.43, 0.62);
-  ball(g, 0.025, "#ffd040", 0.05, WY + 0.43, 0.65, 1, 1, 1, 0);
-  for (const x of [-1.05, 1.05]) {
-    box(g, 0.66, 0.56, 0.05, st.trim, x, WY + 0.6, 0.58);
-    box(g, 0.54, 0.44, 0.04, "#ffd890", x, WY + 0.6, 0.6, 0, 0, 0, { emissive: "#ffb050", emissiveIntensity: 1.8 });
-    box(g, 0.04, 0.44, 0.02, st.trim, x, WY + 0.6, 0.63); box(g, 0.54, 0.04, 0.02, st.trim, x, WY + 0.62, 0.63);
-    box(g, 0.2, 0.18, 0.02, st.curtain, x + 0.15, WY + 0.72, 0.625);
-    for (const side of [-1, 1]) {                     // daun jendela terbuka
-      const sh = new THREE.Group(); sh.position.set(x + side * 0.33, WY + 0.6, 0.6); sh.rotation.y = side * 0.9; g.add(sh);
-      box(sh, 0.3, 0.5, 0.03, st.shutter, side * 0.15, 0, 0);
-      for (let k = 0; k < 5; k++) box(sh, 0.26, 0.025, 0.045, st.shutter2, side * 0.15, -0.18 + k * 0.09, 0.01);
-    }
-    box(g, 0.6, 0.08, 0.14, st.trim, x, WY + 0.28, 0.66);                 // pot bunga di jendela
-    for (let k = 0; k < 4; k++) ball(g, 0.06, ["#ff6a8a", "#ffd040", "#ffffff", "#ff9a40"][k], x - 0.22 + k * 0.15, WY + 0.37, 0.67, 1, 1, 1, 0);
-  }
-  // beranda berpagar dan tangga
-  const RY = FL + 0.12;
-  for (const [x0, x1] of [[-1.9, -0.45], [0.45, 1.9]]) {
+  // pagar: tembok rendah berlapis plester, tiang, dan jeruji besi; celah gerbang di depan pintu
+  for (const [x0, x1] of [[-1.98, 0.05], [1.0, 1.98]]) {
     const w = x1 - x0, cx = (x0 + x1) / 2;
-    box(g, w, 0.06, 0.06, st.trim, cx, RY + 0.42, 1.38);
-    box(g, w, 0.05, 0.05, st.trim, cx, RY + 0.08, 1.38);
-    for (let x = x0 + 0.08; x < x1; x += 0.16) box(g, 0.035, 0.34, 0.035, st.trim2, x, RY + 0.25, 1.38);
+    box(g, w, 0.4, 0.14, st.accent, cx, 0.2, 1.47);
+    box(g, w, 0.04, 0.06, "#2a2a30", cx, 0.95, 1.47);
+    for (let x = x0 + 0.06; x < x1; x += 0.12) box(g, 0.025, 0.55, 0.025, "#2a2a30", x, 0.68, 1.47);
   }
-  for (const x of [-1.9, 1.9]) {
-    box(g, 0.06, 0.06, 0.9, st.trim, x, RY + 0.42, 0.95);
-    for (let z = 0.6; z < 1.38; z += 0.16) box(g, 0.035, 0.34, 0.035, st.trim2, x, RY + 0.25, z);
-  }
-  for (let i = 0; i < 4; i++) box(g, 0.8, 0.07, 0.2, st.floor, 0, FL - 0.06 - i * 0.14, 1.52 + i * 0.18);
-  for (const x of [-0.42, 0.42]) box(g, 0.05, 0.05, 0.85, st.trim, x, RY + 0.12, 1.75, -0.62, 0, 0);
-  // sandal jepit di bawah tangga
-  for (const [x, c] of [[-0.55, "#3a7ae0"], [-0.42, "#3a7ae0"], [0.5, "#f05a5a"], [0.62, "#f05a5a"]]) box(g, 0.08, 0.02, 0.18, c, x, 0.01, 2.15, 0, x * 0.4, 0);
-  // pot tanaman di beranda dan lentera
-  for (const x of [-1.5, 1.5]) {
-    cyl(g, 0.12, 0.09, 0.2, 6, "#c8643a", x, RY + 0.1, 0.95);
-    ball(g, 0.2, "#3f9a3e", x, RY + 0.32, 0.95, 1, 1.1, 1, 0);
-  }
-  // atap pelana besar dan atap kecil di atas pintu
-  const RT = WY + WH;
-  add(g, prism(4.2, 0.95, 3.0), st.roof2, 0, RT, -0.1);
-  texRoof(g, 4.2, 0.95, 3.0, RT, -0.1, roofTex[st.tin ? "tin" : "clay"]);   // permukaan genteng atau seng bertekstur
-  box(g, 4.3, 0.1, 0.12, st.trim, 0, RT + 0.93, -0.1);   // bubungan
-  for (const s of [-1, 1]) box(g, 0.08, 0.08, 1.85, st.trim, s * 2.12, RT + 0.47, 0.62, -0.565, 0, 0);   // lisplang samping
-  const front = add(g, prism(1.3, 0.7, 1.6), st.roof, 0, RT + 0.05, 1.05);
-  front.rotation.y = Math.PI / 2;
-  box(g, 0.08, 0.06, 0.95, st.trim, -0.4, RT + 0.42, 1.85, 0, 0, 0); box(g, 0.08, 0.06, 0.95, st.trim, 0.4, RT + 0.42, 1.85);
-  const tri = new THREE.Shape(); tri.moveTo(-0.62, 0); tri.lineTo(0.62, 0); tri.lineTo(0, 0.6); tri.lineTo(-0.62, 0);
-  add(g, new THREE.ShapeGeometry(tri), st.trim, 0, RT + 0.06, 1.71);
-  for (let k = 0; k < 6; k++) cone(g, 0.05, 0.1, 4, st.trim, -0.5 + k * 0.2, RT + 0.0, 1.73, Math.PI, 0, 0);   // ukiran lisplang
-  box(g, 0.1, 0.14, 0.1, "#ffe48a", 0.55, RT - 0.12, 1.25, 0, 0, 0, { emissive: "#ffcc55", emissiveIntensity: 2.5 });
-  const pl = new THREE.PointLight("#ffa850", 5, 4.5, 2); pl.position.set(0.55, RT - 0.3, 1.6); g.add(pl);
+  for (const x of [-1.98, 0.05, 1.0, 1.98]) box(g, 0.18, 1.05, 0.18, st.wall, x, 0.52, 1.47);
   g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return g;
 }
-buildHouse(3, 4, { post: "#6a4a32", floor: "#a0703f", wall: "#d8a868", wall2: "#c08e52", trim: "#f4ead2", trim2: "#8a5a34",
-  door: "#8a5432", curtain: "#e8506a", shutter: "#3a8a5a", shutter2: "#2a6a44", roof: "#d0503a", roof2: "#a83a2c", tin: false });
-buildHouse(13, 4, { post: "#5a5a64", floor: "#8a6a4a", wall: "#9ccbe8", wall2: "#86b6d4", trim: "#ffffff", trim2: "#7a8a9a",
-  door: "#5a6a8a", curtain: "#ffd060", shutter: "#d0603a", shutter2: "#a8482a", roof: "#7a8aa0", roof2: "#5a687c", tin: true });
-
+buildHouse(3, 4, { wall: "#f2e6cf", accent: "#c98b5a", door: "#6a4630", curtain: "#e8506a" });
+buildHouse(13, 4, { wall: "#dfe7ec", accent: "#7d8ea0", door: "#4a4f5a", curtain: "#ffd060" });
 
 // lampu jalan: model dimuat di worldReady; di sini cahaya titik dan halo
 const haloTex = (() => {
@@ -732,7 +645,7 @@ function fit() {
   Object.assign(view, { w, h });
   const wrap = document.getElementById("wrap");
   wrap.style.width = w + "px"; wrap.style.height = h + "px";
-  uiCanvas.style.width = w + "px"; uiCanvas.style.height = h + "px";
+  wrap.style.setProperty("--w", w + "px");          // ukuran huruf dialog mengikuti lebar layar main
   renderer.setSize(w, h);
   camera.aspect = w / h; camera.updateProjectionMatrix();
   const pr = renderer.getPixelRatio();
@@ -746,9 +659,9 @@ addEventListener("resize", fit);
 fit();
 
 // model karakter dimuat setelah ukuran layar siap, sebelum input dan putaran permainan berjalan
-drawText(ctx, "Memuat...", Math.round((VW - textW("Memuat...")) / 2), 156, "#f4f4ff", "#0b0d24");   // tampil selama model karakter dimuat
 const [playerActor, ...npcActors] = await Promise.all(["nino", ...NPCS.map((n) => n.char)].map(makeActor));
 await worldReady;
+document.getElementById("loading").remove();
 NPCS.forEach((n, i) => { n.actor = npcActors[i]; });
 
 function placeCamera() {
@@ -777,47 +690,18 @@ function render(now, dt) {
   post.uniforms.tScene.value = rt.texture;
   renderer.setRenderTarget(null);
   renderer.render(postScene, postCam);
-  ctx.clearRect(0, 0, VW, VH);
+  dlgEl.style.display = dlg.npc ? "block" : "none";
   if (dlg.npc) drawDialog(now);
 }
 
-function wrapText(text, maxW) {
-  const out = [];
-  let line = "";
-  for (const w of text.split(" ")) {
-    const t = line ? line + " " + w : w;
-    if (line && textW(t) > maxW) { out.push(line); line = w; } else line = t;
-  }
-  if (line) out.push(line);
-  return out;
-}
-
+// kotak dialog di DOM: teks diketik bertahap, panah berkedip saat baris selesai
+const dlgEl = document.getElementById("dlg"), dlgName = document.getElementById("dlgName");
+const dlgText = document.getElementById("dlgText"), dlgNext = document.getElementById("dlgNext");
 function drawDialog(now) {
-  const x = 4, y = 234, w = VW - 8, h = 82;
-  ctx.globalAlpha = 0.94;
-  R(ctx, "#0b0d24", x, y + 1, w, h - 2); R(ctx, "#0b0d24", x + 1, y, w - 2, h);   // panel biru gradasi, bingkai bertingkat
-  const g = ctx.createLinearGradient(0, y, 0, y + h);
-  g.addColorStop(0, "#2d3a82"); g.addColorStop(1, "#171c52");
-  ctx.fillStyle = g; ctx.fillRect(x + 2, y + 2, w - 4, h - 4);
-  ctx.globalAlpha = 1;
-  R(ctx, "#b8c2ff", x + 2, y + 2, w - 4, 1); R(ctx, "#b8c2ff", x + 2, y + 2, 1, h - 4);
-  R(ctx, "#6c78d4", x + 3, y + h - 3, w - 5, 1); R(ctx, "#6c78d4", x + w - 3, y + 3, 1, h - 5);
-  const nw = textW(dlg.npc.name) + 10;                                            // kartu nama
-  R(ctx, "#0b0d24", x + 6, y - 8, nw, 12);
-  R(ctx, "#f4cf5a", x + 7, y - 7, nw - 2, 10); R(ctx, "#fff1b0", x + 7, y - 7, nw - 2, 1);
-  drawText(ctx, dlg.npc.name, x + 12, y - 5, "#3a2a14");
   const text = dlg.npc.lines[dlg.line];
-  let start = 0;
-  wrapText(text, w - 18).forEach((ln, i) => {
-    const part = ln.slice(0, Math.max(0, Math.floor(dlg.shown) - start));
-    drawText(ctx, part, x + 9, y + 10 + i * 10, "#f4f4ff", "#0b0d24");
-    start += ln.length + 1;
-  });
-  if (dlg.shown >= text.length && Math.floor(now / 400) % 2 === 0) {
-    const ax = x + w - 14, ay = y + h - 11;
-    R(ctx, "#f4cf5a", ax, ay, 7, 1); R(ctx, "#f4cf5a", ax + 1, ay + 1, 5, 1);
-    R(ctx, "#f4cf5a", ax + 2, ay + 2, 3, 1); R(ctx, "#f4cf5a", ax + 3, ay + 3, 1, 1);
-  }
+  dlgName.textContent = dlg.npc.name;
+  dlgText.textContent = text.slice(0, Math.floor(dlg.shown));
+  dlgNext.style.visibility = dlg.shown >= text.length && Math.floor(now / 400) % 2 === 0 ? "visible" : "hidden";
 }
 
 // ================================================================ input
@@ -879,7 +763,7 @@ function tileToScreen(tx, ty) {
   const r = glCanvas.getBoundingClientRect();
   return { x: r.left + (p.x * 0.5 + 0.5) * r.width, y: r.top + (-p.y * 0.5 + 0.5) * r.height, left: r.left, top: r.top, w: r.width, h: r.height };
 }
-window.__recursio = { VW, VH, TS, MW, MH, map, player, cam, target, dlg, NPCS, CAM_BOUNDS, tileToScreen, playerActor };
+window.__recursio = { TS, MW, MH, map, player, cam, target, dlg, NPCS, CAM_BOUNDS, tileToScreen, playerActor };
 </script>
 </body>
 </html>
