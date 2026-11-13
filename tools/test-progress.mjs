@@ -2,9 +2,10 @@
 import assert from "node:assert/strict";
 import { DATA } from "../battle/data.mjs";
 import { createBattle, overflowChance, statAt } from "../battle/engine.mjs";
-import { newSave, xpKe, tambahXp, statAkhir, pasang, lepas, cekItem, pv, mv, partyBattle, selesaiBattle, istirahat, simpan, muat, dipakaiOleh } from "../game/progress.mjs";
+import { beriItem, newSave, xpKe, tambahXp, statAkhir, pasang, lepas, cekItem, pv, mv, partyBattle, selesaiBattle, istirahat, simpan, muat, dipakaiOleh } from "../game/progress.mjs";
 
 const ok = (name, fn) => { fn(); console.log("lulus |", name); };
+const baru = () => { const s = newSave(); for (const id of Object.keys(DATA.equip)) beriItem(s, id); return s; };
 const memStore = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)) }; };
 
 ok("level naik sesuai tabel Game System (XP 20L+10, stat dasar + pertumbuhan)", () => {
@@ -75,6 +76,13 @@ ok("data yang dimuat ulang sama dengan yang disimpan", () => {
   assert.equal(simpan(s, st), true);
   assert.deepEqual(muat(st), s);
   assert.deepEqual(muat(memStore()), newSave());   // tanpa data: mulai baru
+});
+
+ok("tas kosong di awal, item masuk lewat cerita dan tidak dobel", () => {
+  const s = newSave(); assert.equal(s.itemMiliki.length, 0);
+  beriItem(s, "topi_kardus"); beriItem(s, "topi_kardus");
+  assert.deepEqual(s.itemMiliki, [{ id: "topi_kardus", ilv: 1, kotor: 0, umur: 40 }]);
+  assert.equal(baru().itemMiliki.length, 4);
 });
 
 console.log("\nSemua uji lulus");

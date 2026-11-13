@@ -113,8 +113,43 @@ export function startRound(s) {
     .map((x) => x.f.id);
   // Musuh dengan aksi lebih dari satu (bos) beraksi lagi di akhir ronde.
   for (const e of enemies(s)) for (let i = 1; i < (s.d.musuh[e.key].aksi || 1); i++) if (alive(e)) s.queue.push(e.id);
+  // Serbu: bos memindahkan kartunya ke slot Nino, Balapan terjadi saat giliran Nino tiba.
+  s.salip = false;
+  s.serbu = bosDiBelakangNino(s) && s.rng() < s.d.balapan.serbu;
+  if (s.serbu) log(s, `${bosHidup(s).nama} Serbu ke slot Nino`);
   return s.queue;
 }
+
+const bosHidup = (s) => enemies(s).find((e) => e.bos && alive(e));
+// Balapan hanya mungkin jika kartu bos masih ada di antrian setelah giliran Nino.
+function bosDiBelakangNino(s) {
+  const b = bosHidup(s), n = byId(s, "nino");
+  return !!b && alive(n) && !n.st.hang && s.queue.includes(b.id);
+}
+
+// Salip: skill Nino, sekali per ronde, tidak memakai giliran. Dipanggil saat giliran Nino, sebelum Balapan.
+export const bisaSalip = (s) => !s.salip && !s.serbu && bosDiBelakangNino(s) && byId(s, "nino").en >= s.d.balapan.salipEn;
+export function salip(s) {
+  if (!bisaSalip(s)) return false;
+  byId(s, "nino").en -= s.d.balapan.salipEn; s.salip = true;
+  log(s, "Nino Salip ke slot bos");
+  return true;
+}
+
+// Hasil Balapan. Menang: aksi bos di slot itu batal dan Nino lanjut beraksi (hasil true).
+// Kalah: bos beraksi sekarang dan giliran Nino batal (hasil false).
+export function balapan(s, menang) {
+  const b = bosHidup(s), n = byId(s, "nino");
+  s.serbu = false;
+  const i = s.queue.indexOf(b.id);
+  if (i >= 0) s.queue.splice(i, 1);
+  if (menang) { log(s, `Nino menang Balapan, aksi ${b.nama} batal`); return true; }
+  log(s, "Nino kalah Balapan, aksinya batal");
+  n.st.retas = null;
+  act(s, b);
+  return false;
+}
+export const batasBalapan = (s) => s.d.balapan.batasMs[s.bab - 1] ?? 450;
 
 // Ambil petarung berikutnya yang bisa beraksi. Null berarti ronde selesai.
 // Hasil: { actor, auto } — auto true berarti act() tanpa aksi (musuh, Kael diambil alih).
@@ -133,7 +168,7 @@ export function beginTurn(s) {
       if (f.st.diambil) return { actor: f, auto: true };
       if (tingkat(f.kesadaran) === "goyah" && s.rng() < s.d.kesadaran.goyahSkip) { log(s, "Kael goyah, giliran lewat"); f.st.retas = null; continue; }
     }
-    return { actor: f, auto: false, glitch: f.st.retas || null };
+    return { actor: f, auto: false, glitch: f.st.retas || null, balapan: f.key === "nino" && s.serbu && bosDiBelakangNino(s) ? "serbu" : null };
   }
   return null;
 }

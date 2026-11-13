@@ -1,6 +1,6 @@
 // Layar battle di DOM, di atas dunia 3D. Logika aturan seluruhnya di engine.mjs.
 import { DATA } from "./data.mjs";
-import { createBattle, startRound, beginTurn, act, ulangi, overflowChance, dengar, allowed, alive, party, enemies, byId, tingkat } from "./engine.mjs";
+import { createBattle, startRound, beginTurn, act, ulangi, overflowChance, salip, bisaSalip, balapan, batasBalapan, dengar, allowed, alive, party, enemies, byId, tingkat } from "./engine.mjs";
 
 const CSS = `
 #bt { position: absolute; inset: 0; z-index: 5; color: #f2f2ff; display: flex; flex-direction: column; gap: 0.5em; padding: 0.7em 0.7em 0.9em; box-sizing: border-box;
@@ -59,6 +59,14 @@ const CSS = `
 #bt .big { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.8em; background: rgba(6,6,16,0.75); z-index: 2; }
 #bt .big h2 { margin: 0; font-size: 1.8em; }
 #bt .naik { color: #ffd76a; font-weight: 800; }
+#bt .race { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1em; background: rgba(6,6,16,0.86); }
+#bt .race h3 { margin: 0; font-size: 1.3em; }
+#bt .lamps { display: flex; gap: 0.6em; padding: 0.6em 0.9em; border-radius: 0.9em; background: #15151f; border: 2px solid #333; }
+#bt .lamp { width: 2.4em; height: 2.4em; border-radius: 50%; background: #2a2a33; }
+#bt .lamp.on { background: #ff3b4e; box-shadow: 0 0 1em #ff3b4e; }
+#bt .lamp.go { background: #3dff7a; box-shadow: 0 0 1.2em #3dff7a; }
+#bt .race button { width: 9em; height: 9em; border-radius: 50%; font-size: 1.2em; }
+#bt .race .res { min-height: 1.4em; font-weight: 800; }
 #bt .flash { position: absolute; left: 0; right: 0; top: 42%; text-align: center; font-size: 1.6em; font-weight: 800; color: #ff5c8a; text-shadow: 0 0 0.5em #f06; animation: btPop 0.9s forwards; pointer-events: none; z-index: 3; }
 @keyframes btPulse { 50% { transform: scale(1.04); } }
 @keyframes btShake { 25% { transform: translateX(-0.3em); } 75% { transform: translateX(0.3em); } }
@@ -137,9 +145,10 @@ export function openBattle(host, opts) {
   }
 
   // jalankan aksi lalu tampilkan angka damage atau pulih di kartu yang berubah
-  function doAct(f, action) {
+  const doAct = (f, action) => withPops(() => act(s, f, action));
+  function withPops(fn) {
     const before = Object.fromEntries(s.fighters.map((x) => [x.id, x.hp]));
-    act(s, f, action);
+    const out = fn();
     for (const x of s.fighters) {
       const d = x.hp - before[x.id];
       if (!d) continue;
@@ -148,6 +157,35 @@ export function openBattle(host, opts) {
       if (d < 0) { c.classList.remove("hit"); void c.offsetWidth; c.classList.add("hit"); }
     }
     flushLog(); refresh();
+    return out;
+  }
+
+  // Balapan: tiga lampu merah, jeda acak 1 sampai 2,5 detik, lalu hijau. Tap sebelum hijau kalah, telat juga kalah.
+  function adu(judul) {
+    const batas = opts.batasBalapan ?? batasBalapan(s);
+    const box = el("div", "race", `<h3>${judul}</h3><div class="lamps"><div class="lamp"></div><div class="lamp"></div><div class="lamp"></div></div><div class="res">Tap saat lampu hijau</div>`);
+    const btn = el("button", "", "GAS!"), lamps = [...box.querySelectorAll(".lamp")], res = box.querySelector(".res");
+    cmdEl.innerHTML = ""; box.appendChild(btn); root.appendChild(box);
+    return new Promise((done) => {
+      let hijau = 0, selesai = false; const timers = [];
+      const end = (menang, teks) => {
+        if (selesai) return; selesai = true; timers.forEach(clearTimeout);
+        res.textContent = teks; btn.disabled = true;
+        setTimeout(() => { box.remove(); done(menang); }, 800 * speed);
+      };
+      lamps.forEach((l, i) => timers.push(setTimeout(() => l.classList.add("on"), 500 * (i + 1))));
+      timers.push(setTimeout(() => {
+        lamps.forEach((l) => { l.classList.remove("on"); l.classList.add("go"); });
+        hijau = performance.now();
+        timers.push(setTimeout(() => end(false, "Telat!"), batas));
+      }, 1500 + 1000 + Math.random() * 1500));
+      btn.addEventListener("pointerdown", (e) => {
+        e.stopPropagation();
+        if (!hijau) return end(false, "Start terlalu cepat!");
+        const ms = Math.round(performance.now() - hijau);
+        end(ms <= batas, ms <= batas ? `Menang! ${ms} ms` : "Telat!");
+      });
+    });
   }
 
   function pick(filter) {
@@ -186,7 +224,11 @@ export function openBattle(host, opts) {
     }
   }
 
-  async function playerTurn(f, glitch) {
+  async function playerTurn(f, glitch, serbu) {
+    if (serbu) {   // bos Serbu ke slot Nino: Balapan dulu, kalah berarti giliran ini batal
+      const menang = await adu("Serbu! Balapan");
+      if (!withPops(() => balapan(s, menang))) return;
+    }
     const ok = allowed(s, f), foes = (x) => x.side === "musuh" && alive(x), allies = (x) => x.side === "party" && alive(x);
     const bos = enemies(s).some((e) => e.bos);
     let timer = null, timedOut = false;
@@ -208,7 +250,9 @@ export function openBattle(host, opts) {
         { label: "Skill", v: "skill", disabled: !ok.includes("skill") && !ok.some((x) => x.startsWith("skill:")) },
         { label: "Barang", v: "barang", disabled: !ok.includes("barang") || !Object.values(s.items).some((n) => n > 0) },
         { label: "Bertahan", v: "bertahan" },
-        { label: "Mundur", v: "mundur", disabled: bos || !ok.includes("mundur"), cls: "wide alt" },
+        bos && f.key === "nino"
+          ? { label: "Salip", cost: `EN ${DATA.balapan.salipEn}`, v: "salip", disabled: !bisaSalip(s), cls: "wide alt" }
+          : { label: "Mundur", v: "mundur", disabled: bos || !ok.includes("mundur"), cls: "wide alt" },
       ];
       if (glitch === "tukar") {   // dua tombol bertukar posisi, label tetap benar
         const a = Math.floor(s.rng() * 4); let b = Math.floor(s.rng() * 3); if (b >= a) b++;
@@ -218,6 +262,13 @@ export function openBattle(host, opts) {
       const v = await race(buttons([...head, ...main], glitch));
       if (v === "timeout") return doAct(f, { cmd: "bertahan" });
       if (v === "bertahan" || v === "mundur") { stopTimer(); return doAct(f, { cmd: v }); }
+      if (v === "salip") {   // tidak memakai giliran: menang berarti aksi bos batal dan Nino tetap memilih perintah
+        stopTimer(); salip(s); flushLog(); refresh();
+        const menang = await adu("Salip! Balapan");
+        if (!withPops(() => balapan(s, menang))) return;
+        glitch = null;
+        continue;
+      }
       if (v === "serang") {
         msgEl.textContent = "Pilih musuh";
         const back = buttons([{ label: "Kembali", v: "back", cls: "wide alt" }]);
@@ -288,7 +339,7 @@ export function openBattle(host, opts) {
       while (!s.over && (t = beginTurn(s))) {
         current = t.actor; flushLog(); refresh();
         if (t.auto) { cmdEl.innerHTML = ""; await pause(650); doAct(t.actor, null); await pause(700); }
-        else await playerTurn(t.actor, t.glitch);
+        else await playerTurn(t.actor, t.glitch, t.balapan);
         if (!s.over) await pause(250);
       }
       flushLog();

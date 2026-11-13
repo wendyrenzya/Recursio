@@ -32,7 +32,9 @@ import * as THREE from "./lib/three.module.min.js";
 import { loadChar } from "./chars3d.js";
 import { GLTFLoader } from "./lib/GLTFLoader.js";
 import { openBattle } from "./battle/ui.mjs";
-import { muat, simpan, partyBattle, selesaiBattle, istirahat, ubahKesadaran } from "./game/progress.mjs";
+import { muat, simpan, partyBattle, selesaiBattle, istirahat, ubahKesadaran, beriItem } from "./game/progress.mjs";
+import { BAB1 } from "./game/bab1.mjs";
+import { DATA } from "./battle/data.mjs";
 import { createHud } from "./game/tas.mjs";
 
 // ================================================================ dasar
@@ -126,19 +128,9 @@ function roofCanvas() {
 }
 
 // ================================================================ keadaan permainan
-const NPCS = [
-  { name: "Alisa", tx: 6, ty: 8, char: "alisa", dir: "down",
-    lines: [
-      "Nino, ngana so pulang? Kakak so masak ikan cakalang, makan dulu.",
-      "Kakak dengar gempa makin sering. HP-mu juga sering error to?",
-      "Kalau ngana pe baju so kotor, bawa ke Kakak. Kakak cuci, gratis.",
-    ] },
-  { name: "Rin", tx: 12, ty: 8, char: "rin", dir: "down",
-    lines: [
-      "Oh, Nino. Kael ada di dalam, main game terus dari tadi.",
-      "Tante pe anak itu kelihatan malas, mar Tante tahu dia sedang berjuang.",
-      "Kalau ada barang rusak, bawa ke Tante. Tante perbaiki.",
-    ] },
+const NPCS = [   // dialog diambil dari cerita (game/bab1.mjs) saat diajak bicara
+  { name: "Alisa", id: "alisa", tx: 6, ty: 8, char: "alisa", dir: "down", lines: [] },
+  { name: "Rin", id: "rin", tx: 12, ty: 8, char: "rin", dir: "down", lines: [] },
 ];
 const npcAt = (x, y) => NPCS.find((n) => n.tx === x && n.ty === y);
 const walkable = (x, y) => baseWalkable(x, y) && !npcAt(x, y);
@@ -147,6 +139,7 @@ const player = { tx: 9, ty: 3, x: 9 * TS, y: 3 * TS, path: [], dir: "down", walk
 const save = muat();                              // progres tersimpan di perangkat
 if (walkable(save.pos.tx, save.pos.ty)) Object.assign(player, { tx: save.pos.tx, ty: save.pos.ty, x: save.pos.tx * TS, y: save.pos.ty * TS });
 let hud = null, menuOpen = false;
+const trail = [];                                 // jejak posisi Nino, diikuti Kael
 const DIR_YAW = { down: 0, up: Math.PI, left: -Math.PI / 2, right: Math.PI / 2 };   // arah hadap model 3D
 const target = { x: -1, y: -1 };
 const cam = { x: 0, z: 0 };                      // titik fokus kamera dalam satuan tile
@@ -157,7 +150,38 @@ const CPS = 40;                                  // karakter per detik
 const adjacent = (n) => Math.abs(n.tx - player.tx) + Math.abs(n.ty - player.ty) === 1;
 const atRest = () => player.x === player.tx * TS && player.y === player.ty * TS && player.path.length === 0;
 const dirTo = (dx, dy) => (Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down"));
+// ---------------------------------------------------------------- cerita Bab 1
+const cerita = save.cerita;
+const adaKael = () => cerita.langkah >= 3;
+const anomaliAktif = (a) => !save.flags[a.id] && cerita.langkah === (a.bos ? 4 : 3);
+function tujuan() {
+  const teks = BAB1.tujuan[cerita.langkah] || "";
+  return cerita.langkah === 3 ? `${teks} (${BAB1.anomali.filter((a) => save.flags[a.id]).length}/${BAB1.anomali.length})` : teks;
+}
+function majuCerita(langkah, pesan) {
+  cerita.langkah = langkah; simpan(save); hud.refresh();
+  if (pesan) hud.toast(pesan);
+}
+// baris "Nama|teks": nama pembicara di depan, kosong berarti narasi, tanpa "|" berarti NPC yang diajak bicara
+function dlgLine() {
+  const raw = dlg.npc.lines[dlg.line], i = raw.indexOf("|");
+  return i < 0 ? { n: dlg.npc.name, t: raw } : { n: raw.slice(0, i), t: raw.slice(i + 1) };
+}
+// adegan tanpa NPC (narasi, percakapan Nino dan Kael)
+function openScript(lines, onEnd) {
+  player.path = []; pending = null; target.x = -1;
+  dlg.npc = { name: "", lines, script: true, onEnd }; dlg.line = 0; dlg.shown = 0;
+}
+function selesaiBicara(n) {
+  if (n.script) return n.onEnd?.();
+  const beri = (ids) => { ids.forEach((id) => beriItem(save, id)); return "Dapat " + ids.map((id) => DATA.equip[id].nama).join(" dan ") + " | buka Tas"; };
+  if (n.id === "alisa" && cerita.langkah === 1) return majuCerita(2, beri(BAB1.hadiah.alisa));
+  if (n.id === "rin" && cerita.langkah === 2) { const pesan = beri(BAB1.hadiah.rin); kaelGabung(); return majuCerita(3, pesan); }
+  if (n.id === "alisa" && cerita.langkah >= 2) { istirahat(save); simpan(save); hud.refresh(); hud.toast("Istirahat di rumah | HP dan kesadaran pulih"); }
+}
+
 function openDialog(n) {
+  n.lines = BAB1[n.id][cerita.langkah] || BAB1[n.id].lain;
   dlg.npc = n; dlg.line = 0; dlg.shown = 0;
   n.dir = dirTo(player.tx - n.tx, player.ty - n.ty);
   player.dir = dirTo(n.tx - player.tx, n.ty - player.ty);
@@ -165,12 +189,12 @@ function openDialog(n) {
   pending = null; target.x = -1;
 }
 function advanceDialog() {
-  const text = dlg.npc.lines[dlg.line];
+  const text = dlgLine().t;
   if (dlg.shown < text.length) { dlg.shown = text.length; return; }
   if (++dlg.line >= dlg.npc.lines.length) {
     const n = dlg.npc;
     n.dir = "down"; dlg.npc = null;
-    if (n.name === "Alisa") { istirahat(save); simpan(save); hud.refresh(); hud.toast("Istirahat di rumah | HP dan kesadaran pulih"); }
+    selesaiBicara(n);
     return;
   }
   dlg.shown = 0;
@@ -229,29 +253,38 @@ function faceTo(dx, dy) {
 }
 
 let battle = null;                               // Promise battle yang sedang berjalan
-function startBattle() {
+function startBattle(a) {
   player.path = []; pending = null; target.x = -1; player.walk = 0;
-  hud.el.style.display = "none";
+  hud.el.style.display = "none"; dlgEl.style.display = "none";
   battle = openBattle(document.getElementById("wrap"), {
-    bab: 1, musuh: ["anomali_statis", "anomali_statis"], party: partyBattle(save), items: { ...save.item },
+    bab: 1, musuh: a.musuh, party: partyBattle(save), items: { ...save.item },
     hasil: (s) => {
       const naik = selesaiBattle(save, s);
-      if (s.over === "menang") save.flags.anomali_uji = true;
+      if (s.over === "menang") save.flags[a.id] = true;
       simpan(save);
       return naik;
     },
   });
   battle.then((r) => {
-    if (r === "menang") { anomaly.alive = false; anomaly.group.visible = false; }
-    anomaly.armed = false; battle = null;
+    a.armed = false; battle = null;
     hud.el.style.display = ""; hud.refresh();
+    if (r !== "menang") return;
+    if (a.bos) openScript(BAB1.penutup, () => majuCerita(5, "Bab 1 selesai"));
+    else if (BAB1.anomali.every((x) => save.flags[x.id])) openScript(BAB1.setelahAnomali, () => majuCerita(4));
   });
+}
+// Mendekati anomali: adegan pengantar sekali saja, lalu battle.
+function temuAnomali(a) {
+  const adegan = a.bos ? "sebelumBos" : "sebelumBattle";
+  if (save.flags[adegan]) return startBattle(a);
+  save.flags[adegan] = true;
+  openScript(BAB1[adegan], () => startBattle(a));
 }
 
 function update(dt) {
   if (battle || menuOpen) { player.walk = 0; return; }
   if (dlg.npc) {
-    dlg.shown = Math.min(dlg.npc.lines[dlg.line].length, dlg.shown + CPS * dt);
+    dlg.shown = Math.min(dlgLine().t.length, dlg.shown + CPS * dt);
     player.walk = 0;
     return;
   }
@@ -279,15 +312,22 @@ function update(dt) {
   if (!player.path.length) target.x = -1;
   if (!moved) player.walk = 0;                       // walk: jarak tempuh dalam piksel, menggerakkan siklus langkah
   if (pending && atRest()) { if (adjacent(pending)) openDialog(pending); else pending = null; }
-  const da = Math.hypot(player.x / TS - anomaly.tx, player.y / TS - anomaly.ty);
-  // zona EM sedang di sekitar anomali: kesadaran Kael turun 1 tiap 5 langkah
-  if (moved && anomaly.alive && da < 4) {
-    anomaly.emLangkah += Math.hypot(player.x - x0, player.y - y0) / TS;
-    while (anomaly.emLangkah >= 5) { anomaly.emLangkah -= 5; ubahKesadaran(save, -1); hud.refresh(); }
+  if (moved) {                                       // jejak langkah untuk Kael yang mengikuti
+    trail.push([player.x, player.y]);
+    if (trail.length > 400) trail.splice(0, 200);
   }
   if (moved && !player.path.length) { save.pos = { tx: player.tx, ty: player.ty }; simpan(save); }
-  if (da > 2) anomaly.armed = true;                  // setelah kabur atau kalah, harus menjauh dulu
-  if (anomaly.alive && anomaly.armed && da < 1.1) startBattle();
+  for (const a of anomalies) {
+    if (!anomaliAktif(a)) continue;
+    const da = Math.hypot(player.x / TS - a.tx, player.y / TS - a.ty);
+    // zona EM sedang di sekitar anomali: kesadaran Kael turun 1 tiap 5 langkah
+    if (moved && da < 4) {
+      emLangkah += Math.hypot(player.x - x0, player.y - y0) / TS;
+      while (emLangkah >= 5) { emLangkah -= 5; ubahKesadaran(save, -1); hud.refresh(); }
+    }
+    if (da > 2) a.armed = true;                      // setelah kabur atau kalah, harus menjauh dulu
+    if (a.armed && da < 1.1) { temuAnomali(a); break; }
+  }
 }
 
 // Fokus kamera mengikuti Nino, dibatasi agar tetap di dalam peta
@@ -650,19 +690,24 @@ const marker = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasic
 marker.rotation.x = -Math.PI / 2;
 scene.add(marker);
 
-// Titik anomali sementara untuk uji battle: kubus kecil yang bergetar dan berkedip. Didekati berarti battle.
-const anomaly = { tx: 5, ty: 18, alive: !save.flags.anomali_uji, armed: true, emLangkah: 0, group: new THREE.Group() };
-for (let i = 0; i < 9; i++) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.16), new THREE.MeshBasicMaterial({ color: ["#7ae8ff", "#ff4fb4", "#ffffff"][i % 3], toneMapped: false }));
-  m.userData.seed = i * 1.7;
-  anomaly.group.add(m);
-}
-const anomalyLight = new THREE.PointLight("#9a7bff", 2.5, 3.5, 1.5);
-anomalyLight.position.y = 0.7;
-anomaly.group.add(anomalyLight);
-anomaly.group.position.set(anomaly.tx + 0.5, 0, anomaly.ty + 0.5);
-anomaly.group.visible = anomaly.alive;
-scene.add(anomaly.group);
+// Titik anomali: kubus kecil yang bergetar dan berkedip. Didekati berarti battle. Bos lebih besar dan kemerahan.
+let emLangkah = 0;
+const anomalies = [...BAB1.anomali, BAB1.bos].map((def) => {
+  const a = { ...def, armed: true, group: new THREE.Group() };
+  const warna = def.bos ? ["#ff5a7a", "#ffb04f", "#ffffff"] : ["#7ae8ff", "#ff4fb4", "#ffffff"];
+  for (let i = 0; i < (def.bos ? 16 : 9); i++) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.16), new THREE.MeshBasicMaterial({ color: warna[i % 3], toneMapped: false }));
+    m.userData.seed = i * 1.7;
+    a.group.add(m);
+  }
+  a.light = new THREE.PointLight(def.bos ? "#ff6a5a" : "#9a7bff", 2.5, 3.5, 1.5);
+  a.light.position.y = 0.7;
+  a.group.add(a.light);
+  a.group.position.set(a.tx + 0.5, 0, a.ty + 0.5);
+  if (def.bos) a.group.scale.setScalar(1.7);
+  scene.add(a.group);
+  return a;
+});
 
 // ================================================================ post-processing HD-2D
 // Scene dirender ke tekstur bermipmap. Mipmap dipakai sebagai blur murah untuk tilt-shift dan bloom.
@@ -727,11 +772,31 @@ addEventListener("resize", fit);
 fit();
 
 // model karakter dimuat setelah ukuran layar siap, sebelum input dan putaran permainan berjalan
-const [playerActor, ...npcActors] = await Promise.all(["nino", ...NPCS.map((n) => n.char)].map(makeActor));
+const [playerActor, kaelActor, ...npcActors] = await Promise.all(["nino", "kael", ...NPCS.map((n) => n.char)].map(makeActor));
 await worldReady;
 document.getElementById("loading").remove();
 NPCS.forEach((n, i) => { n.actor = npcActors[i]; });
-hud = createHud(document.getElementById("wrap"), save, { onChange: () => simpan(save), onOpen: (o) => { menuOpen = o; player.path = []; target.x = -1; pending = null; } });
+hud = createHud(document.getElementById("wrap"), save, { tujuan, adaKael, onChange: () => simpan(save), onOpen: (o) => { menuOpen = o; player.path = []; target.x = -1; pending = null; } });
+
+// Kael mengikuti Nino: berjalan di jejak langkah Nino, sekitar satu tile di belakang.
+const kael = { x: player.x, y: player.y + TS, yaw: 0 };
+function kaelGabung() { const r = NPCS.find((n) => n.id === "rin"); kael.x = r.tx * TS; kael.y = (r.ty + 1) * TS; trail.length = 0; }
+function placeKael(dt) {
+  kaelActor.root.visible = kaelActor.blob.visible = adaKael();
+  if (!adaKael()) return;
+  let sisa = TS * 0.95, tx = kael.x, ty = kael.y, px = player.x, py = player.y;
+  for (let i = trail.length - 1; i >= 0 && sisa > 0; i--) {      // mundur di jejak sejauh jarak ikut
+    const [x, y] = trail[i], d = Math.hypot(px - x, py - y);
+    if (d >= sisa) { tx = px + (x - px) * sisa / d; ty = py + (y - py) * sisa / d; sisa = 0; break; }
+    sisa -= d; px = x; py = y; tx = x; ty = y;
+  }
+  if (sisa > 0 && trail.length === 0) { tx = kael.x; ty = kael.y; }
+  const dx = tx - kael.x, dy = ty - kael.y, d = Math.hypot(dx, dy), langkah = Math.min(d, SPEED * 1.15 * dt);
+  const jalan = d > 0.5;
+  if (jalan) { kael.x += dx / d * langkah; kael.y += dy / d * langkah; kael.yaw = Math.atan2(dx, dy); }
+  placeActor(kaelActor, kael.x / TS + 0.5, kael.y / TS + 0.5, kael.yaw, dt, jalan);
+}
+if (cerita.langkah === 0) openScript(BAB1.pembuka, () => majuCerita(1));
 
 function placeCamera() {
   camera.position.set(cam.x, DIST * Math.sin(PITCH), cam.z + DIST * Math.cos(PITCH));
@@ -749,14 +814,19 @@ function render(now, dt) {
   for (const n of NPCS) placeActor(n.actor, n.tx + 0.5, n.ty + 0.5, DIR_YAW[n.dir], dt, false);
   marker.visible = target.x >= 0;
   if (marker.visible) { marker.position.set(target.x + 0.5, 0.03, target.y + 0.5); marker.material.opacity = 0.55 + 0.45 * Math.sin(t * 8); }
-  if (anomaly.alive) anomaly.group.children.forEach((m, i) => {
-    if (!m.isMesh) return;
-    const k = m.userData.seed, j = Math.floor(t * 12 + k) % 5 === 0;
-    m.position.set(Math.sin(t * 2 + k) * 0.28 + (j ? 0.08 : 0), 0.45 + Math.sin(t * 3.1 + k * 2) * 0.25, Math.cos(t * 2 + k) * 0.28);
-    m.rotation.set(t * 2 + k, t * 3, 0);
-    m.visible = Math.floor(t * 9 + k * 3) % 7 !== 0;
-  });
-  anomalyLight.intensity = 2 + Math.sin(t * 20) * 0.8;
+  for (const a of anomalies) {
+    a.group.visible = anomaliAktif(a);
+    if (!a.group.visible) continue;
+    a.group.children.forEach((m) => {
+      if (!m.isMesh) return;
+      const k = m.userData.seed, j = Math.floor(t * 12 + k) % 5 === 0;
+      m.position.set(Math.sin(t * 2 + k) * 0.28 + (j ? 0.08 : 0), 0.45 + Math.sin(t * 3.1 + k * 2) * 0.25, Math.cos(t * 2 + k) * 0.28);
+      m.rotation.set(t * 2 + k, t * 3, 0);
+      m.visible = Math.floor(t * 9 + k * 3) % 7 !== 0;
+    });
+    a.light.intensity = 2 + Math.sin(t * 20) * 0.8;
+  }
+  placeKael(dt);
   waterMat.uniforms.uTime.value = t; flyMat.uniforms.uTime.value = t;
   halos.forEach((hl, i) => { const s = 1.6 + Math.sin(t * 3 + i) * 0.08; hl.scale.set(s, s, 1); });
   const fp = new THREE.Vector3(player.x / TS + 0.5, 0.6, player.y / TS + 0.5).project(camera);
@@ -775,8 +845,8 @@ function render(now, dt) {
 const dlgEl = document.getElementById("dlg"), dlgName = document.getElementById("dlgName");
 const dlgText = document.getElementById("dlgText"), dlgNext = document.getElementById("dlgNext");
 function drawDialog(now) {
-  const text = dlg.npc.lines[dlg.line];
-  dlgName.textContent = dlg.npc.name;
+  const { n, t: text } = dlgLine();
+  dlgName.textContent = n; dlgName.style.display = n ? "" : "none";
   dlgText.textContent = text.slice(0, Math.floor(dlg.shown));
   dlgNext.style.visibility = dlg.shown >= text.length && Math.floor(now / 400) % 2 === 0 ? "visible" : "hidden";
 }
@@ -842,7 +912,7 @@ function tileToScreen(tx, ty) {
   const r = glCanvas.getBoundingClientRect();
   return { x: r.left + (p.x * 0.5 + 0.5) * r.width, y: r.top + (-p.y * 0.5 + 0.5) * r.height, left: r.left, top: r.top, w: r.width, h: r.height };
 }
-window.__recursio = { TS, MW, MH, map, player, cam, target, dlg, NPCS, CAM_BOUNDS, tileToScreen, playerActor, anomaly, save, get battle() { return battle; } };
+window.__recursio = { TS, MW, MH, map, player, cam, target, dlg, NPCS, CAM_BOUNDS, tileToScreen, playerActor, anomalies, save, kael, get battle() { return battle; } };
 </script>
 </body>
 </html>

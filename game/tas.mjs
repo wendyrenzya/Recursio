@@ -11,6 +11,8 @@ const CSS = `
 #hud .bar, #tas .bar { height: 0.32em; border-radius: 99px; background: rgba(0,0,0,0.45); overflow: hidden; margin: 0.15em 0 0.3em; }
 #hud .bar i, #tas .bar i { display: block; height: 100%; background: linear-gradient(90deg, #5be37d, #b9f56a); }
 #hud .bar.k i { background: linear-gradient(90deg, #8a7bff, #c5a8ff); }
+#hud .tujuan { margin-top: 0.4em; font-size: 0.62em; line-height: 1.3; padding: 0.35em 0.6em; border-radius: 0.6em; width: 9.6em; background: rgba(14,16,40,0.62); border-left: 3px solid #ffd76a; }
+#hud .tujuan:empty { display: none; }
 #tas .bar.x i { background: linear-gradient(90deg, #ffd76a, #ffb347); }
 #hud button, #tas button { pointer-events: auto; font: inherit; font-weight: 800; color: #1d1830; border: 0; border-radius: 0.7em; padding: 0.55em 0.9em;
   background: linear-gradient(#fff3c9, #f2c95a); box-shadow: 0 0.2em 0 #a5781e; touch-action: manipulation; }
@@ -48,21 +50,24 @@ const fmtMod = (it) => [
 const itemLabel = (id) => { const it = DATA.equip[id]; return `<span class="nm">${it.nama}</span><span class="tier ${it.tier}">${DATA.tier[it.tier].nama} ILv ${it.ilv}</span>`; };
 
 // opts.onChange(): dipanggil setelah save berubah (untuk disimpan). opts.onOpen(open): menu dibuka atau ditutup.
+// opts.tujuan(): teks tujuan cerita. opts.adaKael(): false selama Kael belum bergabung.
 export function createHud(host, save, opts = {}) {
   if (!document.getElementById("tasCss")) { const st = el("style"); st.id = "tasCss"; st.textContent = CSS; document.head.appendChild(st); }
   const hud = el("div"); hud.id = "hud";
-  const st = el("div", "st"), btn = el("button", "", "Tas"), toastEl = el("div", "toast");
+  const kiri = el("div"), st = el("div", "st"), tujuanEl = el("div", "tujuan"), btn = el("button", "", "Tas"), toastEl = el("div", "toast");
   toastEl.style.opacity = 0;
-  hud.append(st, btn, toastEl);
+  kiri.append(st, tujuanEl);
+  hud.append(kiri, btn, toastEl);
   host.appendChild(hud);
   let lastHtml = "", toastT = 0;
 
   function refresh() {
     const n = save.party.nino, k = save.party.kael, nm = statAkhir(save, "nino").stats.hp, km = statAkhir(save, "kael").stats.hp;
     const lv = { stabil: "Stabil", goyah: "Goyah", kritis: "Kritis", diambil: "Diambil alih" }[tingkat(k.kesadaran)];
-    const html = `<div class="ln"><span>Nino Lv ${n.level}</span><span>${n.hp}/${nm}</span></div><div class="bar"><i style="width:${100 * n.hp / nm}%"></i></div>
+    const html = `<div class="ln"><span>Nino Lv ${n.level}</span><span>${n.hp}/${nm}</span></div><div class="bar"><i style="width:${100 * n.hp / nm}%"></i></div>` + (opts.adaKael && !opts.adaKael() ? "" : `
       <div class="ln"><span>Kael Lv ${k.level}</span><span>${k.hp}/${km}</span></div><div class="bar"><i style="width:${100 * k.hp / km}%"></i></div>
-      <div class="ln"><span>Kesadaran</span><span>${lv} ${k.kesadaran}</span></div><div class="bar k"><i style="width:${k.kesadaran}%"></i></div>`;
+      <div class="ln"><span>Kesadaran</span><span>${lv} ${k.kesadaran}</span></div><div class="bar k"><i style="width:${k.kesadaran}%"></i></div>`);
+    tujuanEl.textContent = opts.tujuan?.() || "";
     if (html !== lastHtml) { st.innerHTML = html; lastHtml = html; }
   }
 
@@ -82,7 +87,7 @@ export function createHud(host, save, opts = {}) {
     function draw() {
       root.innerHTML = "";
       const top = el("div", "top");
-      for (const k of ["nino", "kael"]) { const b = el("button", "tab" + (k === who ? "" : " off"), DATA.karakter[k].nama); b.dataset.k = k; tap(b, () => { who = k; slotSel = null; draw(); }); top.appendChild(b); }
+      for (const k of opts.adaKael && !opts.adaKael() ? ["nino"] : ["nino", "kael"]) { const b = el("button", "tab" + (k === who ? "" : " off"), DATA.karakter[k].nama); b.dataset.k = k; tap(b, () => { who = k; slotSel = null; draw(); }); top.appendChild(b); }
       const tutup = el("button", "", "Tutup"); tap(tutup, close); top.appendChild(tutup);
       root.appendChild(top);
 

@@ -1,10 +1,11 @@
 // Simulasi keseimbangan: node tools/sim.mjs [jumlah] [seed]
 // Strategi pemain sederhana: berhenti di kedalaman 2, tanpa Dengar, tanpa Balapan.
 import { DATA } from "../battle/data.mjs";
-import { createBattle, startRound, beginTurn, act, ulangi, alive, party, enemies, byId, tingkat, mulberry32 } from "../battle/engine.mjs";
+import { createBattle, startRound, beginTurn, act, balapan, ulangi, alive, party, enemies, byId, tingkat, mulberry32 } from "../battle/engine.mjs";
 
 const N = +process.argv[2] || 1000, SEED = +process.argv[3] || 1;
 const SALAH_RETAS = 0.1; // peluang pemain salah tap saat layar diretas (giliran jadi Bertahan)
+const MENANG_BALAPAN = 0.8; // pemain menang 80 persen Balapan (kriteria uji di HP), Salip tidak dipakai
 const MAX_RONDE = 40;
 
 function stack(s, want) {
@@ -40,7 +41,10 @@ export function run(bab, keys, items, seed) {
   while (!s.over && s.round < MAX_RONDE) {
     startRound(s);
     let t;
-    while (!s.over && (t = beginTurn(s))) act(s, t.actor, t.auto ? null : decide(s, t.actor));
+    while (!s.over && (t = beginTurn(s))) {
+      if (t.balapan && !balapan(s, s.rng() < MENANG_BALAPAN)) continue;   // kalah Balapan: giliran Nino batal
+      act(s, t.actor, t.auto ? null : decide(s, t.actor));
+    }
   }
   return { win: s.over === "menang", rounds: s.round, hpLeft: party(s).reduce((a, p) => a + p.hp, 0) / party(s).reduce((a, p) => a + p.maxHp, 0) };
 }

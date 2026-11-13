@@ -3,14 +3,15 @@ import { DATA } from "../battle/data.mjs";
 import { statAt } from "../battle/engine.mjs";
 
 export const LEVEL_MAKS = 10;
-export const SAVE_KEY = "recursio.save.v1";
+export const SAVE_KEY = "recursio.save.v2";
+const VERSI = 2;
 const KEYS = ["nino", "kael"];
 
 export const xpKe = (level) => 20 * level + 10;   // XP untuk naik dari level ini ke berikutnya
 
 export function newSave() {
   return {
-    versi: 1, bab: 1, area: "manado_rumah_nino", pos: { tx: 9, ty: 3 },
+    versi: VERSI, bab: 1, cerita: { langkah: 0 }, area: "manado_rumah_nino", pos: { tx: 9, ty: 3 },
     party: {
       nino: { level: 1, xp: 0, hp: statAt("nino", 1).hp },
       kael: { level: 1, xp: 0, hp: statAt("kael", 1).hp, kesadaran: DATA.kesadaran.max },
@@ -18,8 +19,7 @@ export function newSave() {
     item: { kopi_kaleng: 2, baterai: 1, headset_gaming: 1 },
     bahan: { benang: 0, kain_perca: 0, benang_emas: 0 },
     equip: { nino: { topi: null, baju: null, gelang: null, sepatu: null }, kael: { topi: null, baju: null, gelang: null, sepatu: null } },
-    // Sementara: item awal di tas sampai peti Bab 1 dibuat.
-    itemMiliki: Object.keys(DATA.equip).map((id) => ({ id, ilv: DATA.equip[id].ilv, kotor: 0, umur: DATA.tier[DATA.equip[id].tier].umur })),
+    itemMiliki: [],                                 // equipment didapat lewat cerita
     pekerjaanNpc: [],
     flags: {},
   };
@@ -42,6 +42,10 @@ export function cekItem(id) {
   if (cost(it.minus) < mv(it.tier, it.ilv)) err.push(`${id}: minus ${cost(it.minus)} di bawah MV ${mv(it.tier, it.ilv)}`);
   for (const k of Object.keys(it.plus || {})) if (it.minus?.[k]) err.push(`${id}: ${k} plus dan minus sekaligus`);
   return err;
+}
+
+export function beriItem(save, id) {
+  if (!save.itemMiliki.some((m) => m.id === id)) save.itemMiliki.push({ id, ilv: DATA.equip[id].ilv, kotor: 0, umur: DATA.tier[DATA.equip[id].tier].umur });
 }
 
 export const dipakaiOleh = (save, id) => KEYS.find((k) => Object.values(save.equip[k]).includes(id)) || null;
@@ -129,7 +133,7 @@ export function simpan(save, store = globalThis.localStorage) {
 export function muat(store = globalThis.localStorage) {
   try {
     const raw = store.getItem(SAVE_KEY);
-    if (raw) { const o = JSON.parse(raw); if (o?.versi === 1) return o; }
+    if (raw) { const o = JSON.parse(raw); if (o?.versi === VERSI) return o; }
   } catch { /* penyimpanan tidak tersedia, mulai baru */ }
   return newSave();
 }

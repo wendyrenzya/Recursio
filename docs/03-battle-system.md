@@ -148,18 +148,18 @@ Dokumen ini mengubah enam bagian Game System v1. Perubahan ini sudah diterapkan 
 
 **Hasil simulasi build (12 November 2026)**
 
-Asumsi simulasi: battle biasa berisi 2 musuh bab itu, bos dilawan sendiri dengan 2 Kopi Kaleng. Party masuk dengan HP penuh, EN 5, kesadaran 100, di level target. Pemain salah tap 10 persen saat layar diretas. Strategi: Stack berhenti di kedalaman 2, musuh yang Mengisi diincar untuk Sela, Kael menyembuhkan sekutu di bawah 40 persen HP, Nino memakai Putus Sinyal saat EN cukup. Dengar dan Balapan belum ikut dihitung.
+Asumsi simulasi: battle biasa berisi 2 musuh bab itu, bos dilawan sendiri dengan 2 Kopi Kaleng. Party masuk dengan HP penuh, EN 5, kesadaran 100, di level target. Pemain salah tap 10 persen saat layar diretas. Strategi: Stack berhenti di kedalaman 2, musuh yang Mengisi diincar untuk Sela, Kael menyembuhkan sekutu di bawah 40 persen HP, Nino memakai Putus Sinyal saat EN cukup. Dengar belum ikut dihitung. Balapan dihitung sejak 13 November 2026: bos Serbu 30 persen ronde, pemain menang 80 persen Balapan, Salip tidak dipakai. Karena itu HP bos Bab 3 dan 4 dinaikkan sedikit.
 
 | Bab | Battle | Menang | Rata-rata ronde |
 | --- | --- | --- | --- |
 | 1 | Biasa | 78 persen | 6,5 |
-| 1 | Bos | 62 persen | 9,0 |
+| 1 | Bos | 65 persen | 8,8 |
 | 2 | Biasa | 79 persen | 8,6 |
-| 2 | Bos | 55 persen | 9,0 |
+| 2 | Bos | 61 persen | 9,2 |
 | 3 | Biasa | 86 persen | 7,5 |
-| 3 | Bos | 64 persen | 6,6 |
+| 3 | Bos | 67 persen | 7,4 |
 | 4 | Biasa | 80 persen | 6,8 |
-| 4 | Bos | 64 persen | 6,2 |
+| 4 | Bos | 66 persen | 6,1 |
 
 Catatan: battle biasa 6 sampai 9 ronde masih terasa panjang untuk HP. Penyebab utamanya Jangkar (pulih 20 + 2 x level per giliran) yang hampir menutup damage musuh. Kalau battle mau lebih singkat, pilihannya menurunkan Jangkar atau menaikkan biayanya, lalu tuning ulang musuh.
 - [ ] Uji Balapan di HP Android kelas menengah: pemain baru menang minimal 80 persen percobaan di bos Bab 1.
@@ -171,7 +171,8 @@ Catatan: battle biasa 6 sampai 9 ronde masih terasa panjang untuk HP. Penyebab u
 - Layar battle ada di `battle/ui.mjs` dan memakai mesin yang sama dengan simulasi. Isinya kartu musuh (HP, kedalaman Stack, rencana jika Dengar), kartu Nino dan Kael (HP, EN, kesadaran), strip antrian, menu perintah, fase Stack (Ulangi dengan peluang Overflow, Selesai), dan glitch Tukar dengan batas 6 detik.
 - Untuk uji, ada satu titik anomali di peta (dekat jalan melintang) yang memicu battle melawan 2 Anomali Statis. Menang berarti anomali hilang. Kalah bisa diulang. Ini sementara sampai konten Bab 1 dibuat.
 - Dunia 3D berhenti dirender selama battle supaya hemat baterai. Gambar terakhirnya jadi latar.
-- Belum ada: glitch Palsu dan Spam (Bab 2 ke atas), Balapan (battle bos), Bukti (Bab 5), dan mode santai tanpa batas waktu.
+- Balapan (13 November 2026): saat bos Serbu, Balapan terjadi di giliran Nino. Salip jadi tombol di menu Nino pada battle bos (EN 3, sekali per ronde, tidak memakai giliran), menggantikan Mundur yang memang tidak bisa dipakai melawan bos. Menang berarti satu aksi bos di ronde itu batal dan Nino tetap beraksi, kalah berarti bos beraksi saat itu juga dan giliran Nino batal. Penyederhanaan dari dokumen: kartu tidak digeser, cukup tap Salip. Balapan hanya terjadi kalau kartu bos masih ada di antrian setelah giliran Nino.
+- Belum ada: glitch Palsu dan Spam (Bab 2 ke atas), Bukti (Bab 5), dan mode santai tanpa batas waktu.
 
 **Pertanyaan terbuka**
 

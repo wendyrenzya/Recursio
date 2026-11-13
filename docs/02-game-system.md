@@ -137,10 +137,10 @@ Nama masih placeholder. Pengikut sekte di Bab 5 tidak berstatus Terkendali, jadi
 | 2 | Gema Jaringan (bos) | Anomali EM | 245 | 28 | 5 | 6 | 60 |
 | 3 | Anomali Siaran | Anomali EM | 85 | 35 | 6 | 7 | 28 |
 | 3 | Peretas Terkendali | Manusia | 110 | 33 | 5 | 7 | 30 |
-| 3 | Rekan yang Hilang (bos) | Manusia | 190 | 25 | 8 | 7 | 90 |
+| 3 | Rekan yang Hilang (bos) | Manusia | 225 | 25 | 8 | 7 | 90 |
 | 4 | Warga Terkendali Kuat | Manusia | 100 | 38 | 8 | 7 | 40 |
 | 4 | Anomali Pusaran | Anomali EM | 115 | 44 | 10 | 9 | 45 |
-| 4 | Orang Dekat Terkendali (bos) | Manusia | 140 | 28 | 12 | 8 | 140 |
+| 4 | Orang Dekat Terkendali (bos) | Manusia | 170 | 28 | 12 | 8 | 140 |
 | 5 | Pengikut Sekte | Manusia, beriman | Iman 100 | 26 | 14 | 8 | 55 |
 | 5 | Pengawal Nabi (bos) | Manusia, beriman | Iman 200 | 28 | 15 | 10 | 200 |
 
@@ -203,6 +203,7 @@ Saya usul membangun Bab 1 sampai tuntas dulu sebagai irisan vertikal, baru Bab 2
 4. **Level, XP, bar kesadaran, equipment dasar, simpan:** equipment dasar berarti 4 slot, tier Normal dan Rare, plus dan minus. Lulus jika level naik sesuai tabel, bonus equipment masuk ke stat, dan data yang dimuat ulang sama dengan yang disimpan.
    Status 13 November 2026: selesai. Level dan XP sesuai tabel, bonus equipment masuk ke stat, dan simpan otomatis di perangkat (`localStorage`, kunci `recursio.save.v1`). Data tersimpan setelah battle, setelah ganti equipment, dan tiap Nino berhenti berjalan. Asumsi sementara: selesai bicara dengan Alisa dihitung istirahat di rumah (HP dan kesadaran pulih penuh), dan radius 4 tile di sekitar titik anomali uji dihitung zona EM sedang. HP dan kesadaran terbawa antar battle, EN selalu mulai 5.
 5. **Bab 1 lengkap:** Lulus jika pemain bisa memainkan dari awal sampai mengalahkan Lonjakan Sinyal di HP.
+   Status 13 November 2026: selesai di uji browser (`game/bab1.mjs`). Alur: pembuka, Alisa memberi topi dan kaos, Rin memanggil Kael (sandal dan gelang karet), 3 titik anomali, bos Lonjakan Sinyal di dekat kolam dengan Balapan, lalu penutup. Dialognya draf dan bisa diganti di file itu. Uji di HP sungguhan belum dilakukan.
 6. **Bab 2 sampai 5:** satu bab per tahap, tiap bab diuji dengan cara yang sama. Equipment menyusul per bab sesuai tabel di Equipment: cuci dan perbaikan di Bab 2, Epic di Bab 3, Legendary di Bab 4, Mythical di Bab 5.
 
 PRD, dokumen ini, Battle System, dan Equipment sudah disetujui. Pertanyaan terbuka di PRD dan Equipment perlu dijawab sebelum konten bab terkait dibuat.

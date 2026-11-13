@@ -1,5 +1,5 @@
 // Uji aturan mesin battle: node tools/test-battle.mjs
-import { createBattle, startRound, beginTurn, act, ulangi, dengar, byId, damage, tingkat } from "../battle/engine.mjs";
+import { createBattle, startRound, beginTurn, act, ulangi, dengar, byId, damage, tingkat, salip, bisaSalip, balapan, batasBalapan } from "../battle/engine.mjs";
 import assert from "node:assert/strict";
 
 const fixed = (...v) => { let i = 0; return () => v[i++ % v.length]; };
@@ -93,6 +93,30 @@ ok("Bos beraksi dua kali per ronde dan tidak bisa ditinggal Mundur", () => {
   const s = mk(["lonjakan_sinyal"]); const q = startRound(s);
   assert.equal(q.filter((id) => id === "m0").length, 2);
   act(s, byId(s, "nino"), { cmd: "mundur" }); assert.equal(s.over, null);
+});
+
+ok("Serbu: Balapan saat giliran Nino. Menang membatalkan aksi bos di slot itu", () => {
+  const s = mk(["lonjakan_sinyal"], fixed(0.1)); startRound(s);
+  assert.equal(s.serbu, true);
+  const t = beginTurn(s); assert.equal(t.actor.key, "nino"); assert.equal(t.balapan, "serbu");
+  assert.equal(balapan(s, true), true);
+  assert.equal(s.queue.filter((id) => id === "m0").length, 1);   // sisa satu aksi bos (aksi kedua)
+});
+
+ok("Kalah Balapan: bos beraksi saat itu juga, giliran Nino batal", () => {
+  const s = mk(["lonjakan_sinyal"], fixed(0.1)); startRound(s); beginTurn(s);
+  const hp = s.fighters.filter((f) => f.side === "party").reduce((a, f) => a + f.hp, 0);
+  assert.equal(balapan(s, false), false);
+  assert.ok(s.fighters.filter((f) => f.side === "party").reduce((a, f) => a + f.hp, 0) < hp);
+});
+
+ok("Salip: EN 3, sekali per ronde, hanya di battle bos", () => {
+  const s = mk(["lonjakan_sinyal"], fixed(0.9)); startRound(s); beginTurn(s);
+  assert.equal(s.serbu, false); assert.equal(bisaSalip(s), true);
+  assert.equal(salip(s), true); assert.equal(byId(s, "nino").en, 4); assert.equal(salip(s), false);
+  const n = mk(["anomali_statis"], fixed(0.9)); startRound(n); beginTurn(n);
+  assert.equal(bisaSalip(n), false);
+  assert.equal(batasBalapan(s), 700);
 });
 
 console.log("\nSemua uji lulus");
